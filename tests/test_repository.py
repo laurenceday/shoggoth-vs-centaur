@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import re
 import sys
 import tempfile
 import unittest
@@ -80,15 +81,16 @@ class ScaffoldTests(unittest.TestCase):
             with self.subTest(command=command):
                 self.assertIn(command, workflow)
 
-    def test_readme_says_profiles_exist_and_synthesis_is_deferred(self) -> None:
+    def test_readme_exposes_complete_step_three_reader_path(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         self.assertIn(
-            "two symmetric source profiles are now present",
+            "This edition contains the symmetric profiles, comparison matrix, "
+            "conceptual complement and competitive-overlap analysis, decision guide, "
+            "and source ledger.",
             " ".join(readme.split()),
         )
-        self.assertIn("not written until Fiat Step 3", " ".join(readme.split()))
 
-    def test_step_two_commands_are_exposed(self) -> None:
+    def test_final_demo_commands_are_exposed(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         methodology = (ROOT / "docs/00-methodology.md").read_text(encoding="utf-8")
         for command in checker.STEP_COMMANDS:
@@ -273,6 +275,273 @@ class SourceLedgerTests(unittest.TestCase):
 
     def test_source_ledger_checker_is_clean(self) -> None:
         self.assertEqual(checker.check_source_ledger(self.ledger), [])
+
+
+class SynthesisContractTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.matrix = (ROOT / checker.MATRIX_FILE).read_text(encoding="utf-8")
+        cls.complement = (ROOT / checker.COMPLEMENT_FILE).read_text(encoding="utf-8")
+        cls.decision = (ROOT / checker.DECISION_FILE).read_text(encoding="utf-8")
+        cls.readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        cls.methodology = (ROOT / "docs/00-methodology.md").read_text(encoding="utf-8")
+        cls.workflow = (ROOT / ".github/workflows/verify.yml").read_text(encoding="utf-8")
+
+    def test_all_three_synthesis_contracts_are_clean(self) -> None:
+        self.assertEqual(checker.check_matrix_document(self.matrix), [])
+        self.assertEqual(checker.check_complement_document(self.complement), [])
+        self.assertEqual(checker.check_decision_document(self.decision), [])
+
+    def test_matrix_has_exact_thirteen_axis_inventory(self) -> None:
+        rows = checker.matrix_rows(self.matrix)
+        self.assertEqual(len(rows), 13)
+        self.assertEqual(tuple(row[0] for row in rows), checker.MATRIX_AXES)
+
+    def test_missing_matrix_axis_is_rejected(self) -> None:
+        row = next(
+            line for line in self.matrix.splitlines() if line.startswith("| Intended user |")
+        )
+        hostile = self.matrix.replace(row + "\n", "", 1)
+        errors = checker.check_matrix_document(hostile)
+        self.assertTrue(any("matrix-axis rule" in error for error in errors))
+
+    def test_changed_matrix_field_inventory_is_rejected(self) -> None:
+        hostile = self.matrix.replace(
+            "| Responsibility axis | Shoggoth | Centaur | Responsibility difference |",
+            "| Responsibility axis | Shoggoth | Centaur | Overall |",
+            1,
+        )
+        errors = checker.check_matrix_document(hostile)
+        self.assertTrue(any("matrix-field rule" in error for error in errors))
+
+    def test_unlabelled_matrix_claim_is_rejected(self) -> None:
+        hostile = self.matrix.replace("[Current] An operator", "An operator", 1)
+        errors = checker.check_matrix_document(hostile)
+        self.assertTrue(any("matrix-status rule" in error for error in errors))
+
+    def test_matrix_subject_without_profile_source_is_rejected(self) -> None:
+        hostile = self.matrix.replace("01-shoggoth.md#purpose", "missing-profile", 1)
+        errors = checker.check_matrix_document(hostile)
+        self.assertTrue(any("matrix-source-limit rule" in error for error in errors))
+
+    def test_each_current_matrix_subject_cell_needs_its_direct_pin(self) -> None:
+        source = checker.EXPECTED_SOURCES[0]
+        hostile = self.matrix.replace(
+            source["permalink_base"] + "README.md#L5-L17",
+            "https://example.invalid/unpinned-source",
+            1,
+        )
+        errors = checker.check_matrix_document(hostile)
+        self.assertTrue(any("matrix-current-pin rule" in error for error in errors))
+
+    def test_matrix_subject_without_visible_limit_is_rejected(self) -> None:
+        hostile = self.matrix.replace("Limit:", "Boundary:", 1)
+        errors = checker.check_matrix_document(hostile)
+        self.assertTrue(any("matrix-source-limit rule" in error for error in errors))
+
+    def test_matrix_limit_needs_its_own_status(self) -> None:
+        hostile = self.matrix.replace(
+            "[Inferred] Limit: the Skills source",
+            "Limit: the Skills source",
+            1,
+        )
+        errors = checker.check_matrix_document(hostile)
+        self.assertTrue(any("matrix-limit-status rule" in error for error in errors))
+
+    def test_matrix_difference_needs_both_profiles(self) -> None:
+        row = next(
+            line for line in self.matrix.splitlines() if line.startswith("| Intended user |")
+        )
+        hostile_row = row.rsplit("[Centaur context]", 1)[0] + "Centaur context removed |"
+        hostile = self.matrix.replace(row, hostile_row, 1)
+        errors = checker.check_matrix_document(hostile)
+        self.assertTrue(any("matrix-difference-source rule" in error for error in errors))
+
+    def test_centaur_security_residuals_must_remain_adjacent(self) -> None:
+        hostile = self.matrix.replace("permissive egress", "bounded egress", 1)
+        errors = checker.check_matrix_document(hostile)
+        self.assertTrue(any("Centaur-security-adjacency rule" in error for error in errors))
+
+    def test_matrix_rejects_aggregate_result_language(self) -> None:
+        hostile = self.matrix + "\nOverall winner: one subject.\n"
+        errors = checker.check_matrix_document(hostile)
+        self.assertTrue(any("non-scored-matrix rule" in error for error in errors))
+
+    def test_matrix_rejects_each_quantified_or_procurement_shape(self) -> None:
+        for snippet in (
+            "Score: 9",
+            "Overall rating: high",
+            "Rank: 1",
+            "5 stars",
+            "10 points",
+            "Procurement recommendation: adopt one subject",
+        ):
+            with self.subTest(snippet=snippet):
+                errors = checker.check_matrix_document(self.matrix + "\n" + snippet + "\n")
+                self.assertTrue(
+                    any("non-scored-matrix rule" in error for error in errors)
+                )
+
+    def test_matrix_requires_ledger_and_pin_registry(self) -> None:
+        hostile = self.matrix.replace("../evidence/pins.json", "pin-registry-removed", 1)
+        errors = checker.check_matrix_document(hostile)
+        self.assertTrue(any("matrix-evidence rule" in error for error in errors))
+
+    def test_complement_and_competition_have_distinct_sections(self) -> None:
+        self.assertEqual(
+            tuple(checker.H2_HEADING.findall(self.complement)),
+            checker.COMPLEMENT_HEADINGS,
+        )
+
+    def test_collapsed_complement_section_is_rejected(self) -> None:
+        hostile = self.complement.replace(
+            "## Competitive overlap", "## Conceptual complement", 1
+        )
+        errors = checker.check_complement_document(hostile)
+        self.assertTrue(any("analysis-heading-order rule" in error for error in errors))
+
+    def test_competition_is_limited_to_exact_six_responsibilities(self) -> None:
+        competition = checker.section_text(self.complement, "Competitive overlap")
+        self.assertEqual(
+            tuple(checker.H3_HEADING.findall(competition)),
+            checker.COMPETITION_HEADINGS,
+        )
+
+    def test_extra_competitive_responsibility_is_rejected(self) -> None:
+        hostile = self.complement.replace(
+            "## No-integration boundary",
+            "### Runtime hosting\n\nNot in the accepted overlap.\n\n## No-integration boundary",
+            1,
+        )
+        errors = checker.check_complement_document(hostile)
+        self.assertTrue(any("competitive-overlap-axis rule" in error for error in errors))
+
+    def test_each_competitive_axis_needs_consequences(self) -> None:
+        hostile = self.complement.replace("**Shared consequence.**", "**Shared note.**", 1)
+        errors = checker.check_complement_document(hostile)
+        self.assertTrue(any("competitive-consequence rule" in error for error in errors))
+
+    def test_conceptual_complement_keeps_vertical_responsibility_words(self) -> None:
+        hostile = self.complement.replace(
+            "what bounded agent\n  job, evidence, and delivery is authorised",
+            "what work exists",
+            1,
+        )
+        errors = checker.check_complement_document(hostile)
+        self.assertTrue(any("conceptual-complement rule" in error for error in errors))
+
+    def test_hard_no_integration_inventory_is_required(self) -> None:
+        hostile = self.complement.replace("no adapter", "no connector", 1)
+        errors = checker.check_complement_document(hostile)
+        self.assertTrue(any("no-integration boundary" in error for error in errors))
+
+    def test_actionable_adapter_heading_is_rejected(self) -> None:
+        hostile = self.complement + "\n## Adapter design\n\nImplementation detail.\n"
+        errors = checker.check_complement_document(hostile)
+        self.assertTrue(any("no-integration rule" in error for error in errors))
+
+    def test_actionable_api_route_is_rejected(self) -> None:
+        hostile = self.complement + "\nPOST /bridge/session\n"
+        errors = checker.check_complement_document(hostile)
+        self.assertTrue(any("no-integration rule" in error for error in errors))
+
+    def test_decision_guide_has_exact_problem_routes(self) -> None:
+        self.assertEqual(
+            tuple(checker.H2_HEADING.findall(self.decision)),
+            checker.DECISION_HEADINGS,
+        )
+
+    def test_missing_decision_route_is_rejected(self) -> None:
+        hostile = self.decision.replace(
+            "## Does neither pin prove the answer?",
+            "## Is another question open?",
+            1,
+        )
+        errors = checker.check_decision_document(hostile)
+        self.assertTrue(any("decision-heading-order rule" in error for error in errors))
+
+    def test_decision_route_needs_question_inspection_and_unknown(self) -> None:
+        hostile = self.decision.replace("**Inspect next.**", "**Read.**", 1)
+        errors = checker.check_decision_document(hostile)
+        self.assertTrue(any("decision-route-shape rule" in error for error in errors))
+
+    def test_decision_route_needs_visible_unknown_status(self) -> None:
+        hostile = self.decision.replace("[Unknown]", "[Unresolved]", 1)
+        errors = checker.check_decision_document(hostile)
+        self.assertTrue(any("decision-unknown rule" in error for error in errors))
+
+    def test_decision_route_needs_evidence_link(self) -> None:
+        heading = checker.DECISION_HEADINGS[0]
+        body = checker.heading_section(self.decision, 2, heading)
+        without_links = re.sub(r"\[[^\]]+\]\([^)]+\)", "evidence removed", body)
+        hostile = self.decision.replace(body, without_links, 1)
+        errors = checker.check_decision_document(hostile)
+        self.assertTrue(any("decision-evidence rule" in error for error in errors))
+
+    def test_product_choice_verdict_is_rejected(self) -> None:
+        hostile = self.decision + "\nChoose Shoggoth for this work.\n"
+        errors = checker.check_decision_document(hostile)
+        self.assertTrue(any("no-product-verdict rule" in error for error in errors))
+
+    def test_decision_guide_requires_ledger_and_pin_registry(self) -> None:
+        hostile = self.decision.replace("../evidence/pins.json", "pin-removed", 1)
+        errors = checker.check_decision_document(hostile)
+        self.assertTrue(any("decision-evidence rule" in error for error in errors))
+
+    def test_all_synthesis_relative_links_resolve(self) -> None:
+        for relative in checker.SYNTHESIS_FILES:
+            text = (ROOT / relative).read_text(encoding="utf-8")
+            with self.subTest(relative=relative):
+                self.assertEqual(checker.check_relative_links(ROOT, relative, text), [])
+
+    def test_broken_synthesis_relative_link_is_rejected(self) -> None:
+        hostile = self.decision.replace("01-shoggoth.md#purpose", "missing.md", 1)
+        errors = checker.check_relative_links(ROOT, checker.DECISION_FILE, hostile)
+        self.assertTrue(any("unresolved Markdown link" in error for error in errors))
+
+    def test_final_entrypoints_and_demo_are_clean(self) -> None:
+        self.assertEqual(
+            checker.check_final_entrypoints(
+                self.readme, self.methodology, self.workflow
+            ),
+            [],
+        )
+
+    def test_missing_final_navigation_entry_is_rejected(self) -> None:
+        hostile = self.readme.replace(checker.MATRIX_FILE, "matrix-link-removed", 1)
+        errors = checker.check_final_entrypoints(
+            hostile, self.methodology, self.workflow
+        )
+        self.assertTrue(any("navigation rule" in error for error in errors))
+
+    def test_reordered_final_navigation_is_rejected(self) -> None:
+        first, second = checker.README_NAVIGATION[1:3]
+        hostile = self.readme.replace(first, "NAVIGATION_SWAP", 1)
+        hostile = hostile.replace(second, first, 1).replace("NAVIGATION_SWAP", second, 1)
+        errors = checker.check_final_entrypoints(
+            hostile, self.methodology, self.workflow
+        )
+        self.assertTrue(any("navigation-order rule" in error for error in errors))
+
+    def test_old_report_path_is_rejected_by_final_demo_contract(self) -> None:
+        hostile = self.readme.replace(
+            "shoggoth-vs-centaur-step-3.json", "shoggoth-vs-centaur-step-2.json", 1
+        )
+        errors = checker.check_final_entrypoints(
+            hostile, self.methodology, self.workflow
+        )
+        self.assertTrue(any("missing verification command" in error for error in errors))
+
+    def test_synthesis_inventory_has_no_actionable_cross_system_shape(self) -> None:
+        for relative in checker.SYNTHESIS_FILES:
+            text = (ROOT / relative).read_text(encoding="utf-8")
+            with self.subTest(relative=relative):
+                self.assertEqual(checker.check_actionable_integration(relative, text), [])
+
+    def test_numbered_cross_system_phase_is_rejected(self) -> None:
+        hostile = self.decision + "\nPhase 1: connect the systems.\n"
+        errors = checker.check_decision_document(hostile)
+        self.assertTrue(any("no-integration rule" in error for error in errors))
 
 
 class SourceCopyGuardTests(unittest.TestCase):
