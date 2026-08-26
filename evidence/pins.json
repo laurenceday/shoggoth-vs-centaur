@@ -1,0 +1,29 @@
+{
+  "schema": "shoggoth-vs-centaur.pins.v1",
+  "observed_at": "2026-08-26",
+  "sources": [
+    {
+      "subject": "shoggoth",
+      "repository": "wildcat-finance/skills",
+      "commit": "58b7dcd1004bf8e6b0cf517bbcc778789e2c43ff",
+      "permalink_base": "https://github.com/wildcat-finance/skills/blob/58b7dcd1004bf8e6b0cf517bbcc778789e2c43ff/"
+    },
+    {
+      "subject": "centaur",
+      "repository": "paradigmxyz/centaur",
+      "commit": "36397534096bb89c065a52a9fcfebed34b995a00",
+      "permalink_base": "https://github.com/paradigmxyz/centaur/blob/36397534096bb89c065a52a9fcfebed34b995a00/"
+    }
+  ],
+  "target": {
+    "repository": "laurenceday/shoggoth-vs-centaur",
+    "bootstrap_commit": "db38e431561d473d2ee85a1bf4dfe8e94d135c13",
+    "visibility": "private"
+  },
+  "policy": {
+    "source_repositories": "read-only",
+    "current_claims": "full-commit GitHub blob permalinks",
+    "integration": "out-of-scope",
+    "authorship": "human contributor remains author and signer"
+  }
+}
