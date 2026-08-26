@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import hashlib
+import html
 import json
 import os
 import re
@@ -224,6 +225,9 @@ GITHUB_BLOB = re.compile(
 )
 H2_HEADING = re.compile(r"^## ([^\n]+)$", re.MULTILINE)
 H3_HEADING = re.compile(r"^### ([^\n]+)$", re.MULTILINE)
+ATX_HEADING = re.compile(r"^[ \t]{0,3}#{1,6}[ \t]+(.+?)[ \t]*$")
+SETEXT_HEADING = re.compile(r"^[ \t]{0,3}(?:=+|-+)[ \t]*$")
+FENCE_START = re.compile(r"^[ \t]{0,3}(`{3,}|~{3,})")
 LOCAL_PATHS = (
     re.compile(r"(?<![A-Za-z0-9])/(?:Users|home)/[^\s`'\"<>]+"),
     re.compile(r"(?i)(?<![A-Za-z0-9])[A-Z]:\\Users\\[^\s`'\"<>]+"),
@@ -356,6 +360,72 @@ def iter_text(root: Path) -> list[tuple[str, str]]:
     return found
 
 
+def github_heading_slug(heading: str) -> str:
+    """Return the bounded GitHub-style fragment for one Markdown heading."""
+
+    value = html.unescape(heading)
+    value = re.sub(r"!\[([^\]]*)\]\([^)]*\)", r"\1", value)
+    value = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", value)
+    value = re.sub(r"<[^>]+>", "", value)
+    value = re.sub(r"[`*_~]", "", value).casefold()
+    kept = "".join(
+        character
+        for character in value
+        if character.isalnum() or character.isspace() or character in "-_"
+    )
+    return re.sub(r"\s+", "-", kept).strip("-")
+
+
+def markdown_heading_fragments(text: str) -> set[str]:
+    """Collect ATX and setext heading ids, including duplicate suffixes."""
+
+    headings: list[str] = []
+    previous: str | None = None
+    fence: tuple[str, int] | None = None
+    for line in text.splitlines():
+        if fence is not None:
+            character, minimum = fence
+            if re.fullmatch(
+                rf"[ \t]{{0,3}}{re.escape(character)}{{{minimum},}}[ \t]*",
+                line,
+            ):
+                fence = None
+            continue
+
+        fence_match = FENCE_START.match(line)
+        if fence_match:
+            marker = fence_match.group(1)
+            fence = (marker[0], len(marker))
+            previous = None
+            continue
+
+        atx = ATX_HEADING.match(line)
+        if atx:
+            heading = re.sub(r"[ \t]+#+[ \t]*$", "", atx.group(1))
+            headings.append(heading)
+            previous = None
+            continue
+
+        if SETEXT_HEADING.match(line) and previous:
+            headings.append(previous)
+            previous = None
+            continue
+        previous = line.strip() or None
+
+    fragments: set[str] = set()
+    for heading in headings:
+        base = github_heading_slug(heading)
+        if not base:
+            continue
+        fragment = base
+        suffix = 1
+        while fragment in fragments:
+            fragment = f"{base}-{suffix}"
+            suffix += 1
+        fragments.add(fragment)
+    return fragments
+
+
 def check_relative_links(root: Path, relative: str, text: str) -> list[str]:
     errors: list[str] = []
     for match in MARKDOWN_LINK.finditer(text):
@@ -366,15 +436,15 @@ def check_relative_links(root: Path, relative: str, text: str) -> list[str]:
         if parsed.scheme or parsed.netloc or raw.startswith(("/", "~")):
             errors.append(f"{relative}: unsafe Markdown link {raw}")
             continue
-        if raw.startswith("#"):
-            continue
         link_path = unquote(parsed.path)
-        if not link_path:
-            continue
         if "\\" in link_path or "\x00" in link_path:
             errors.append(f"{relative}: unsafe Markdown link {raw}")
             continue
-        candidate = (root / relative).parent / link_path
+        candidate = (
+            (root / relative).parent / link_path
+            if link_path
+            else root / relative
+        )
         try:
             resolved = candidate.resolve(strict=True)
         except FileNotFoundError:
@@ -382,6 +452,27 @@ def check_relative_links(root: Path, relative: str, text: str) -> list[str]:
             continue
         if not _inside(resolved, root.resolve()) or not resolved.is_file():
             errors.append(f"{relative}: Markdown link escapes repository {raw}")
+            continue
+        if parsed.fragment and resolved.suffix.lower() == ".md":
+            try:
+                fragment = unquote(parsed.fragment, errors="strict")
+            except UnicodeDecodeError:
+                errors.append(
+                    f"{relative}: invalid percent-encoded Markdown fragment "
+                    f"#{parsed.fragment} in link {raw}"
+                )
+                continue
+            target_relative = resolved.relative_to(root.resolve()).as_posix()
+            try:
+                target_text = read_text(root, target_relative)
+            except (CheckError, FileNotFoundError) as exc:
+                errors.append(f"{relative}: cannot read Markdown link {raw}: {exc}")
+                continue
+            if fragment not in markdown_heading_fragments(target_text):
+                errors.append(
+                    f"{relative}: unresolved Markdown fragment #{fragment} "
+                    f"in link {raw}"
+                )
     return errors
 
 

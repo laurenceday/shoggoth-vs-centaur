@@ -494,6 +494,26 @@ class SynthesisContractTests(unittest.TestCase):
             with self.subTest(relative=relative):
                 self.assertEqual(checker.check_relative_links(ROOT, relative, text), [])
 
+    def test_corrected_skills_ledger_fragment_resolves(self) -> None:
+        self.assertIn("SOURCES.md#shoggoth-skills-evidence", self.decision)
+        self.assertEqual(
+            checker.check_relative_links(ROOT, checker.DECISION_FILE, self.decision),
+            [],
+        )
+
+    def test_parent_broken_skills_ledger_fragment_is_rejected(self) -> None:
+        hostile = self.decision.replace(
+            "SOURCES.md#shoggoth-skills-evidence",
+            "SOURCES.md#shoggoth--skills-evidence",
+            1,
+        )
+        errors = checker.check_relative_links(ROOT, checker.DECISION_FILE, hostile)
+        self.assertTrue(any(error.startswith(checker.DECISION_FILE) for error in errors))
+        self.assertTrue(
+            any("SOURCES.md#shoggoth--skills-evidence" in error for error in errors)
+        )
+        self.assertTrue(any("#shoggoth--skills-evidence" in error for error in errors))
+
     def test_broken_synthesis_relative_link_is_rejected(self) -> None:
         hostile = self.decision.replace("01-shoggoth.md#purpose", "missing.md", 1)
         errors = checker.check_relative_links(ROOT, checker.DECISION_FILE, hostile)
@@ -630,6 +650,60 @@ class HostileInputTests(unittest.TestCase):
                 root, "docs/fixture.md", "[root](../README.md)"
             )
             self.assertEqual(errors, [])
+
+    def test_heading_fragments_support_duplicates_and_percent_decoding(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            docs = root / "docs"
+            docs.mkdir()
+            target = (
+                "# Repeated heading\n\n"
+                "## Repeated heading\n\n"
+                "Repeated heading\n----------------\n\n"
+                "## Caf\u00e9 heading\n"
+            )
+            (docs / "target.md").write_text(target, encoding="utf-8")
+            (docs / "fixture.md").write_text("fixture\n", encoding="utf-8")
+            links = "\n".join(
+                (
+                    "[first](target.md#repeated-heading)",
+                    "[second](target.md#repeated-heading-1)",
+                    "[third](target.md#repeated-heading-2)",
+                    "[unicode](target.md#caf%C3%A9-heading)",
+                )
+            )
+            self.assertEqual(
+                checker.check_relative_links(root, "docs/fixture.md", links),
+                [],
+            )
+
+    def test_unknown_duplicate_fragment_names_document_link_and_fragment(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            docs = root / "docs"
+            docs.mkdir()
+            (docs / "target.md").write_text(
+                "# Repeated heading\n\n## Repeated heading\n",
+                encoding="utf-8",
+            )
+            (docs / "fixture.md").write_text("fixture\n", encoding="utf-8")
+            raw = "target.md#repeated-heading-2"
+            errors = checker.check_relative_links(
+                root, "docs/fixture.md", f"[broken]({raw})"
+            )
+            self.assertEqual(len(errors), 1)
+            self.assertIn("docs/fixture.md", errors[0])
+            self.assertIn(raw, errors[0])
+            self.assertIn("#repeated-heading-2", errors[0])
+
+    def test_same_file_fragment_is_checked(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            text = "# Local heading\n\n[local](#local-heading)\n"
+            (root / "README.md").write_text(text, encoding="utf-8")
+            self.assertEqual(checker.check_relative_links(root, "README.md", text), [])
 
     def test_absolute_local_path_marker_is_detected(self) -> None:
         hostile = "/" + "Users/" + "alice/source"

@@ -14,7 +14,7 @@ gates? Those are the responsibilities described by the
 
 **Inspect next.** Read the [architecture and owned state](01-shoggoth.md#architecture-and-owned-state),
 the [security boundary](01-shoggoth.md#security-and-trust-boundaries), and the
-[Skills evidence inventory](SOURCES.md#shoggoth--skills-evidence). Confirm that
+[Skills evidence inventory](SOURCES.md#shoggoth-skills-evidence). Confirm that
 the exact skill and Fiat promises cover the proposed job, including their
 refusals and recovery paths.
 
