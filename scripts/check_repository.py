@@ -137,6 +137,14 @@ MATRIX_FILE = "docs/03-comparison-matrix.md"
 COMPLEMENT_FILE = "docs/04-complement-and-competition.md"
 DECISION_FILE = "docs/05-decision-guide.md"
 SYNTHESIS_FILES = (MATRIX_FILE, COMPLEMENT_FILE, DECISION_FILE)
+READER_ANALYSIS_FILES = (
+    "README.md",
+    "docs/00-methodology.md",
+    *PROFILE_FILES,
+    *SYNTHESIS_FILES,
+    "docs/SOURCES.md",
+    "docs/decisions/ADR-001-layer-aware-comparison.md",
+)
 MATRIX_AXES = (
     "Intended user",
     "Deployment shape",
@@ -193,6 +201,29 @@ README_NAVIGATION = (
     "docs/fiat-runbook.md",
     "audit/rounds/fiat-shoggoth-versus-centaur-purpose-capabilities-str.synopsis.md",
 )
+PRODUCT_VERDICT_PATTERNS = (
+    re.compile(r"\b(?:choose|select|adopt|buy)\s+(?:Shoggoth|Centaur)\b", re.I),
+    re.compile(r"\bprefer(?:red)?\s+(?:Shoggoth|Centaur)\b", re.I),
+    re.compile(r"\b(?:Shoggoth|Centaur)\s+wins?\b", re.I),
+    re.compile(
+        r"\bbest\s+(?:choice|option|product|fit)\s*:\s*"
+        r"(?:Shoggoth|Centaur)\b",
+        re.I,
+    ),
+    re.compile(r"\b(?:Shoggoth|Centaur)\s+is\s+(?:the\s+)?superior\b", re.I),
+    re.compile(
+        r"\b(?:Shoggoth|Centaur)\s+is\s+(?:the\s+)?"
+        r"(?:better|best|preferred|recommended)\s+"
+        r"(?:choice|option|product|fit)\b",
+        re.I,
+    ),
+    re.compile(
+        r"\brecommended\s+(?:choice|option|product)\s*:\s*"
+        r"(?:Shoggoth|Centaur)\b",
+        re.I,
+    ),
+    re.compile(r"\brecommend(?:s|ed|ing)?\s+(?:Shoggoth|Centaur)\b", re.I),
+)
 MATRIX_RANKING_PATTERNS = (
     re.compile(r"\bscore(?:s|d|ing)?\b", re.I),
     re.compile(r"\bratings?\b|\brated\b", re.I),
@@ -201,23 +232,146 @@ MATRIX_RANKING_PATTERNS = (
     re.compile(r"(?:\b\d+(?:\.\d+)?\s+stars?\b|\bstars?\s*:\s*\d)", re.I),
     re.compile(r"(?:\b\d+(?:\.\d+)?\s+points?\b|\bpoints?\s*:\s*\d)", re.I),
     re.compile(r"\bprocurement recommendation\b", re.I),
+    re.compile(r"\b(?:better|worse|stronger|weaker)\s+(?:choice|option|product|fit)\b", re.I),
+    re.compile(r"\brecommended\s+(?:choice|option|product)\b", re.I),
+    re.compile(r"\b\d+(?:\.\d+)?\s*/\s*\d+(?:\.\d+)?\b"),
+    *PRODUCT_VERDICT_PATTERNS,
 )
 ACTIONABLE_INTEGRATION_PATTERNS = (
     re.compile(
         r"^#{2,4}\s+(?:adapter|api map|interface map|combined architecture|"
-        r"migration|implementation|embedding|dependencies?)\b",
+        r"integration(?: plan| design| architecture)?|interoperability(?: plan)?|"
+        r"bridge(?: design| plan)?|migration|implementation|embedding|dependencies?)\b",
         re.I | re.MULTILINE,
     ),
     re.compile(r"\b(?:GET|POST|PUT|PATCH|DELETE)\s+/[A-Za-z0-9]"),
     re.compile(r"\b(?:Step|Phase)\s+\d+\s*:", re.I),
-    re.compile(r"\bimplement (?:an|the) (?:adapter|integration|bridge)\b", re.I),
+    re.compile(
+        r"^(?:[ \t]{0,3}(?:[-*+] |\d+\. )?)"
+        r"(?:Build|Create|Design|Implement)\s+(?:an?\s+|the\s+)?"
+        r"(?:adapter|integration|bridge|connector)\b",
+        re.MULTILINE,
+    ),
+    re.compile(
+        r"\b(?:we|this repository|the (?:project|design|team))\s+"
+        r"(?:will|should|must|can)\s+(?:build|create|design|implement)\s+"
+        r"(?:an?\s+|the\s+)?(?:adapter|integration|bridge|connector)\b",
+        re.I,
+    ),
+    re.compile(
+        r"\b(?:plan|proposal|recommendation)\s+(?:is\s+)?to\s+"
+        r"(?:build|create|design|implement)\s+(?:an?\s+|the\s+)?"
+        r"(?:adapter|integration|bridge|connector)\b",
+        re.I,
+    ),
     re.compile(
         r"\b(?:Shoggoth|Centaur)\s+(?:calls|invokes|embeds|depends on)\s+"
         r"(?:Shoggoth|Centaur)\b",
         re.I,
     ),
+    re.compile(
+        r"\b(?:connect|embed|integrate|bridge|wire)\s+(?:the\s+)?"
+        r"(?:Shoggoth|Centaur)\b[^.\n]{0,80}\b(?:with|to|into|in)\s+"
+        r"(?:the\s+)?(?:Shoggoth|Centaur)\b",
+        re.I,
+    ),
+    re.compile(
+        r"\bmap\s+(?:the\s+)?(?:Shoggoth|Centaur)\b[^.\n]{0,100}"
+        r"\b(?:onto|to|into)\s+(?:the\s+)?(?:Shoggoth|Centaur)\b",
+        re.I,
+    ),
+    re.compile(
+        r"\b(?:migrate|port)\s+(?:the\s+)?(?:Shoggoth|Centaur)\b"
+        r"[^.\n]{0,80}\b(?:to|into)\s+(?:the\s+)?(?:Shoggoth|Centaur)\b",
+        re.I,
+    ),
+    re.compile(
+        r"\buse\s+(?:the\s+)?(?:Shoggoth|Centaur)\b[^.\n]{0,80}"
+        r"\b(?:inside|within|under)\s+(?:the\s+)?(?:Shoggoth|Centaur)\b",
+        re.I,
+    ),
+    re.compile(
+        r"\bexpose\s+(?:the\s+)?(?:Shoggoth|Centaur)\b[^.\n]{0,80}"
+        r"\bas\s+(?:the\s+)?(?:Shoggoth|Centaur)\b",
+        re.I,
+    ),
+    re.compile(
+        r"\bmake\s+(?:the\s+)?(?:Shoggoth|Centaur)\b[^.\n]{0,40}"
+        r"\bdepend(?:s|ed|ing)?\s+on\s+(?:the\s+)?(?:Shoggoth|Centaur)\b",
+        re.I,
+    ),
+    re.compile(
+        r"\bconfigure\s+(?:the\s+)?(?:Shoggoth|Centaur)\b[^.\n]{0,40}"
+        r"\bto\s+(?:load|run|invoke|embed)\s+(?:the\s+)?"
+        r"(?:Shoggoth|Centaur)\b",
+        re.I,
+    ),
+    re.compile(
+        r"\b(?:combined|joint)\s+(?:architecture|deployment)\s+"
+        r"(?:would|will|should|can)\b",
+        re.I,
+    ),
+    re.compile(
+        r"\b(?:deploy|run|operate|use)\s+(?:the\s+)?"
+        r"(?:Shoggoth|Centaur)\b[^.\n]{0,40}\b(?:and|with)\s+"
+        r"(?:the\s+)?(?:Shoggoth|Centaur)\b[^.\n]{0,20}\btogether\b",
+        re.I,
+    ),
+    re.compile(
+        r"\b(?:Shoggoth\s+(?:and|with)\s+Centaur|"
+        r"Centaur\s+(?:and|with)\s+Shoggoth)\s+(?:are|is)\s+"
+        r"(?:interoperable|compatible)\b",
+        re.I,
+    ),
+    re.compile(
+        r"(?<!not )(?<!never )\brecommend(?:s|ed|ing)?\s+"
+        r"(?:using|adopting|combining|deploying)\s+"
+        r"(?:Shoggoth\s+(?:and|with)\s+Centaur|"
+        r"Centaur\s+(?:and|with)\s+Shoggoth|both(?:\s+(?:systems|projects))?)"
+        r"(?:\s+together)?\b",
+        re.I,
+    ),
+    re.compile(
+        r"\b(?:combined\s+deployment|integration|adapter|migration|bridge)\b"
+        r"[^.\n]{0,80}\b(?:costs?|budget|price|estimate)\b[^.\n]{0,32}"
+        r"(?:[$£€]\s*\d|\d[\d,.]*\s*(?:USD|GBP|EUR|dollars?|pounds?|euros?))",
+        re.I,
+    ),
     re.compile(r"```mermaid", re.I),
 )
+
+MATRIX_CLAIM_EVIDENCE = {
+    "State and recovery": {
+        "Centaur": (
+            EXPECTED_SOURCES[1]["permalink_base"]
+            + "docs/pages/extend/workflows-v2.mdx#L8-L26",
+            EXPECTED_SOURCES[1]["permalink_base"]
+            + "docs/pages/architecture.mdx#L113-L122",
+        ),
+    },
+    "Skill/instruction model": {
+        "Shoggoth": (
+            EXPECTED_SOURCES[0]["permalink_base"] + "PROMISE_MACHINE.md#L39-L50",
+        ),
+    },
+    "Workflows": {
+        "Centaur": (
+            EXPECTED_SOURCES[1]["permalink_base"]
+            + "services/workflow-python/api/workflow_engine.py#L50-L183",
+        ),
+    },
+    "Multi-agent work": {
+        "Centaur": (
+            EXPECTED_SOURCES[1]["permalink_base"]
+            + "services/workflow-python/api/workflow_engine.py#L123-L180",
+        ),
+    },
+    "Operating burden": {
+        "Centaur": (
+            EXPECTED_SOURCES[1]["permalink_base"] + "README.md#L66-L96",
+        ),
+    },
+}
 
 MARKDOWN_LINK = re.compile(r"(?<!!)\[[^\]]*\]\(([^)\s]+)")
 GITHUB_BLOB = re.compile(
@@ -562,6 +716,18 @@ def check_actionable_integration(relative: str, text: str) -> list[str]:
     return errors
 
 
+def check_product_verdict(relative: str, text: str) -> list[str]:
+    """Reject a product choice, recommendation, or winner statement."""
+
+    errors: list[str] = []
+    for pattern in PRODUCT_VERDICT_PATTERNS:
+        if pattern.search(text):
+            errors.append(
+                f"{relative}: no-product-verdict rule rejects {pattern.pattern!r}"
+            )
+    return errors
+
+
 def check_matrix_document(text: str) -> list[str]:
     """Check the exact neutral responsibility matrix contract."""
 
@@ -631,6 +797,12 @@ def check_matrix_document(text: str) -> list[str]:
                     f"{MATRIX_FILE}: matrix-current-pin rule row {index} {label} "
                     "lacks its registered full pin"
                 )
+            for required in MATRIX_CLAIM_EVIDENCE.get(axis, {}).get(label, ()):
+                if required not in cell:
+                    errors.append(
+                        f"{MATRIX_FILE}: matrix-claim-evidence rule row {index} "
+                        f"{label} lacks {required}"
+                    )
         if "01-shoggoth.md#" not in difference or "02-centaur.md#" not in difference:
             errors.append(
                 f"{MATRIX_FILE}: matrix-difference-source rule row {index} lacks both profiles"
@@ -729,6 +901,7 @@ def check_complement_document(text: str) -> list[str]:
         if marker not in boundary:
             errors.append(f"{COMPLEMENT_FILE}: no-integration boundary missing {marker!r}")
     errors.extend(check_actionable_integration(COMPLEMENT_FILE, text))
+    errors.extend(check_product_verdict(COMPLEMENT_FILE, text))
     return errors
 
 
@@ -761,14 +934,7 @@ def check_decision_document(text: str) -> list[str]:
         errors.append(
             f"{DECISION_FILE}: decision-evidence rule requires the ledger and pin registry"
         )
-    for pattern in (
-        re.compile(r"\bchoose (?:Shoggoth|Centaur)\b", re.I),
-        re.compile(r"\brecommend(?:s|ed|ing)? (?:Shoggoth|Centaur)\b", re.I),
-    ):
-        if pattern.search(text):
-            errors.append(
-                f"{DECISION_FILE}: no-product-verdict rule rejects {pattern.pattern!r}"
-            )
+    errors.extend(check_product_verdict(DECISION_FILE, text))
     errors.extend(check_actionable_integration(DECISION_FILE, text))
     return errors
 
@@ -1012,6 +1178,9 @@ def inspect_repository(root: Path = ROOT) -> tuple[list[str], list[str]]:
             if pattern.search(text):
                 errors.append(f"{relative}: credential-shaped content is prohibited")
                 break
+        if relative in READER_ANALYSIS_FILES and relative not in SYNTHESIS_FILES:
+            errors.extend(check_actionable_integration(relative, text))
+            errors.extend(check_product_verdict(relative, text))
 
     if linked_subjects != {"shoggoth", "centaur"}:
         errors.append("immutable full-commit links are required for both source subjects")

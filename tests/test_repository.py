@@ -315,7 +315,7 @@ class SynthesisContractTests(unittest.TestCase):
         self.assertTrue(any("matrix-field rule" in error for error in errors))
 
     def test_unlabelled_matrix_claim_is_rejected(self) -> None:
-        hostile = self.matrix.replace("[Current] An operator", "An operator", 1)
+        hostile = self.matrix.replace("[Inferred] An operator", "An operator", 1)
         errors = checker.check_matrix_document(hostile)
         self.assertTrue(any("matrix-status rule" in error for error in errors))
 
@@ -327,7 +327,7 @@ class SynthesisContractTests(unittest.TestCase):
     def test_each_current_matrix_subject_cell_needs_its_direct_pin(self) -> None:
         source = checker.EXPECTED_SOURCES[0]
         hostile = self.matrix.replace(
-            source["permalink_base"] + "README.md#L5-L17",
+            source["permalink_base"] + "README.md#L129-L225",
             "https://example.invalid/unpinned-source",
             1,
         )
@@ -375,6 +375,14 @@ class SynthesisContractTests(unittest.TestCase):
             "5 stars",
             "10 points",
             "Procurement recommendation: adopt one subject",
+            "Shoggoth is the better choice.",
+            "Recommended option: Centaur.",
+            "Shoggoth: 5/5.",
+            "Adopt Centaur.",
+            "Prefer Centaur.",
+            "Shoggoth wins.",
+            "Best fit: Shoggoth.",
+            "Centaur is superior.",
         ):
             with self.subTest(snippet=snippet):
                 errors = checker.check_matrix_document(self.matrix + "\n" + snippet + "\n")
@@ -445,6 +453,42 @@ class SynthesisContractTests(unittest.TestCase):
         errors = checker.check_complement_document(hostile)
         self.assertTrue(any("no-integration rule" in error for error in errors))
 
+    def test_plain_language_integration_actions_are_rejected(self) -> None:
+        for snippet in (
+            "## Integration plan\n\nConnect Shoggoth to Centaur.",
+            "Embed Shoggoth in Centaur's sandbox runtime.",
+            "Map the Shoggoth skill interface onto the Centaur API.",
+            "Migrate Shoggoth skills into Centaur overlays.",
+            "Shoggoth and Centaur are interoperable.",
+            "We recommend using Shoggoth and Centaur together.",
+            "A combined deployment would cost £50,000.",
+            "Build an adapter between Shoggoth and Centaur.",
+            "Create a bridge from Centaur to Shoggoth.",
+            "Use Shoggoth inside Centaur.",
+            "Expose Shoggoth skills as Centaur tools.",
+            "Make Centaur depend on Shoggoth.",
+            "The combined architecture would route work through both systems.",
+            "Configure Centaur to load Shoggoth skills.",
+            "Deploy Shoggoth and Centaur together.",
+        ):
+            with self.subTest(snippet=snippet):
+                errors = checker.check_complement_document(
+                    self.complement + "\n" + snippet + "\n"
+                )
+                self.assertTrue(any("no-integration rule" in error for error in errors))
+
+    def test_competitive_overlap_rejects_a_product_winner(self) -> None:
+        hostile = self.complement + "\nCentaur wins.\n"
+        errors = checker.check_complement_document(hostile)
+        self.assertTrue(any("no-product-verdict rule" in error for error in errors))
+
+    def test_negative_no_integration_boundary_is_not_rejected(self) -> None:
+        boundary = checker.section_text(self.complement, "No-integration boundary")
+        self.assertEqual(
+            checker.check_actionable_integration(checker.COMPLEMENT_FILE, boundary),
+            [],
+        )
+
     def test_decision_guide_has_exact_problem_routes(self) -> None:
         self.assertEqual(
             tuple(checker.H2_HEADING.findall(self.decision)),
@@ -482,6 +526,41 @@ class SynthesisContractTests(unittest.TestCase):
         hostile = self.decision + "\nChoose Shoggoth for this work.\n"
         errors = checker.check_decision_document(hostile)
         self.assertTrue(any("no-product-verdict rule" in error for error in errors))
+
+    def test_plain_language_product_verdicts_are_rejected(self) -> None:
+        for snippet in (
+            "Centaur is the better choice.",
+            "Recommended option: Shoggoth.",
+            "Adopt Centaur.",
+            "Prefer Shoggoth.",
+            "Centaur wins.",
+            "Best fit: Centaur.",
+            "Shoggoth is superior.",
+        ):
+            with self.subTest(snippet=snippet):
+                errors = checker.check_decision_document(
+                    self.decision + "\n" + snippet + "\n"
+                )
+                self.assertTrue(
+                    any("no-product-verdict rule" in error for error in errors)
+                )
+
+    def test_matrix_requires_claim_specific_pinned_evidence(self) -> None:
+        rows = {row[0]: row for row in checker.matrix_rows(self.matrix)}
+        column = {"Shoggoth": 1, "Centaur": 2}
+        for axis, subjects in checker.MATRIX_CLAIM_EVIDENCE.items():
+            for subject, required_links in subjects.items():
+                for required in required_links:
+                    with self.subTest(axis=axis, subject=subject, required=required):
+                        self.assertIn(required, rows[axis][column[subject]])
+                        hostile = self.matrix.replace(required, "claim-source-removed")
+                        errors = checker.check_matrix_document(hostile)
+                        self.assertTrue(
+                            any(
+                                "matrix-claim-evidence rule" in error
+                                for error in errors
+                            )
+                        )
 
     def test_decision_guide_requires_ledger_and_pin_registry(self) -> None:
         hostile = self.decision.replace("../evidence/pins.json", "pin-removed", 1)
@@ -557,6 +636,27 @@ class SynthesisContractTests(unittest.TestCase):
             text = (ROOT / relative).read_text(encoding="utf-8")
             with self.subTest(relative=relative):
                 self.assertEqual(checker.check_actionable_integration(relative, text), [])
+
+    def test_reader_analysis_inventory_is_guarded_and_clean(self) -> None:
+        self.assertEqual(
+            set(checker.READER_ANALYSIS_FILES),
+            {
+                "README.md",
+                "docs/00-methodology.md",
+                "docs/01-shoggoth.md",
+                "docs/02-centaur.md",
+                checker.MATRIX_FILE,
+                checker.COMPLEMENT_FILE,
+                checker.DECISION_FILE,
+                "docs/SOURCES.md",
+                "docs/decisions/ADR-001-layer-aware-comparison.md",
+            },
+        )
+        for relative in checker.READER_ANALYSIS_FILES:
+            text = (ROOT / relative).read_text(encoding="utf-8")
+            with self.subTest(relative=relative):
+                self.assertEqual(checker.check_actionable_integration(relative, text), [])
+                self.assertEqual(checker.check_product_verdict(relative, text), [])
 
     def test_numbered_cross_system_phase_is_rejected(self) -> None:
         hostile = self.decision + "\nPhase 1: connect the systems.\n"
