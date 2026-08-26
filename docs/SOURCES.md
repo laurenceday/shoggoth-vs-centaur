@@ -6,10 +6,16 @@ bounded absence searches, and what remains unknown.
 
 ## Edition pins and observation boundary
 
-| Subject | Registered source | Observation on 2026-08-26 | Edition rule |
-| --- | --- | --- | --- |
-| Shoggoth / Skills | `wildcat-finance/skills@58b7dcd1004bf8e6b0cf517bbcc778789e2c43ff` | Local `HEAD`, `origin/main`, and the live `refs/heads/main` observation matched. | Current code claims use the [registered full-commit base](https://github.com/wildcat-finance/skills/blob/58b7dcd1004bf8e6b0cf517bbcc778789e2c43ff/README.md). |
-| Centaur | `paradigmxyz/centaur@36397534096bb89c065a52a9fcfebed34b995a00` | Local `HEAD`, `origin/main`, and the live `refs/heads/main` observation matched. | Current code claims use the [registered full-commit base](https://github.com/paradigmxyz/centaur/blob/36397534096bb89c065a52a9fcfebed34b995a00/README.md). |
+- Shoggoth / Skills uses
+  `wildcat-finance/skills@58b7dcd1004bf8e6b0cf517bbcc778789e2c43ff`.
+  On 2026-08-26, local `HEAD`, `origin/main`, and the live `refs/heads/main`
+  observation matched. Current code claims use the
+  [registered full-commit base](https://github.com/wildcat-finance/skills/blob/58b7dcd1004bf8e6b0cf517bbcc778789e2c43ff/README.md).
+- Centaur uses
+  `paradigmxyz/centaur@36397534096bb89c065a52a9fcfebed34b995a00`.
+  On 2026-08-26, local `HEAD`, `origin/main`, and the live `refs/heads/main`
+  observation matched. Current code claims use the
+  [registered full-commit base](https://github.com/paradigmxyz/centaur/blob/36397534096bb89c065a52a9fcfebed34b995a00/README.md).
 
 The live-main observation proves only that each assigned pin was the public
 tip when observed. It does not make `main` immutable and does not move this
@@ -20,15 +26,15 @@ The machine-readable authority is [`evidence/pins.json`](../evidence/pins.json).
 
 ## Read mode and status use
 
-- **Skills:** canonical contracts, selected implementation and instruction
+- Skills read mode covers canonical contracts, selected implementation and instruction
   surfaces, a whole-set-checked audit synopsis set, merged pull requests, open
   issues, and bounded repository searches.
-- **Centaur:** architecture and security documentation, selected implementation
+- Centaur read mode covers architecture and security documentation, selected implementation
   and deployment files, merged pull requests, open issues, and bounded
   repository searches. No repository audit record was found.
-- **Current claims:** immutable full-commit blob links from the registered
+- Current claims use immutable full-commit blob links from the registered
   repository only.
-- **Public records:** durable pull-request or issue URLs, with status and the
+- Public records use durable pull-request or issue URLs, with status and the
   2026-08-26 observation date stated. A report is not independent reproduction.
 
 The status vocabulary and its non-promotion rule live in
