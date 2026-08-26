@@ -67,7 +67,7 @@ The normal verdict is offline:
 
 ```bash
 python3 scripts/check_repository.py
-python3 scripts/run_tests.py --report .elenchus/shoggoth-vs-centaur-step-1.json
+python3 scripts/run_tests.py --report .elenchus/shoggoth-vs-centaur-step-2.json
 python3 -m unittest discover -s tests
 ```
 
@@ -82,6 +82,8 @@ The human contributor remains the author and signer. Runtime or model names do
 not become Git authors, pull-request bylines, or generated-by footers. The
 private proprietary rights position is recorded in [LICENSE](../LICENSE).
 
-At this scaffold stage, the source profiles and comparative synthesis remain
-unwritten. The accepted [Fiat study](fiat-study.md) and
-[runbook](fiat-runbook.md) define the later work.
+The symmetric [Shoggoth](01-shoggoth.md) and [Centaur](02-centaur.md) profiles
+apply this method, and the [source ledger](SOURCES.md) records their evidence.
+Comparative synthesis remains unwritten until Fiat Step 3. The accepted
+[Fiat study](fiat-study.md) and [runbook](fiat-runbook.md) define that later
+work.

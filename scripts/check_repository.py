@@ -25,6 +25,9 @@ REQUIRED_FILES = (
     "LICENSE",
     "README.md",
     "docs/00-methodology.md",
+    "docs/01-shoggoth.md",
+    "docs/02-centaur.md",
+    "docs/SOURCES.md",
     "docs/decisions/ADR-001-layer-aware-comparison.md",
     "docs/fiat-study.md",
     "docs/fiat-runbook.md",
@@ -34,7 +37,12 @@ REQUIRED_FILES = (
     "tests/__init__.py",
     "tests/test_repository.py",
 )
-COMMANDS = (
+STEP_COMMANDS = (
+    "python3 scripts/check_repository.py",
+    "python3 scripts/run_tests.py --report .elenchus/shoggoth-vs-centaur-step-2.json",
+    "python3 -m unittest discover -s tests",
+)
+WORKFLOW_COMMANDS = (
     "python3 scripts/check_repository.py",
     "python3 scripts/run_tests.py --report .elenchus/shoggoth-vs-centaur-step-1.json",
     "python3 -m unittest discover -s tests",
@@ -68,10 +76,60 @@ FIAT_DIGESTS = {
     ),
 }
 
+PROFILE_FILES = {
+    "docs/01-shoggoth.md": "shoggoth",
+    "docs/02-centaur.md": "centaur",
+}
+PROFILE_HEADINGS = (
+    "Purpose",
+    "Architecture and owned state",
+    "Current capabilities",
+    "Strengths",
+    "Weaknesses and limits",
+    "Security and trust boundaries",
+    "Operating burden",
+    "Residual and open work",
+    "Negative space",
+    "Evidence limits",
+)
+STATUS_LABELS = ("[Current]", "[Inferred]", "[Reported]", "[Planned]", "[Unknown]")
+LEDGER_PULL_REQUESTS = (
+    "https://github.com/wildcat-finance/skills/pull/648",
+    "https://github.com/wildcat-finance/skills/pull/649",
+    "https://github.com/wildcat-finance/skills/pull/539",
+    "https://github.com/wildcat-finance/skills/pull/579",
+    "https://github.com/paradigmxyz/centaur/pull/1497",
+    "https://github.com/paradigmxyz/centaur/pull/1498",
+    "https://github.com/paradigmxyz/centaur/pull/1394",
+    "https://github.com/paradigmxyz/centaur/pull/1439",
+    "https://github.com/paradigmxyz/centaur/pull/1450",
+    "https://github.com/paradigmxyz/centaur/pull/1479",
+)
+LEDGER_ISSUES = (
+    "https://github.com/wildcat-finance/skills/issues/508",
+    "https://github.com/wildcat-finance/skills/issues/558",
+    "https://github.com/wildcat-finance/skills/issues/560",
+    "https://github.com/paradigmxyz/centaur/issues/1385",
+    "https://github.com/paradigmxyz/centaur/issues/1475",
+    "https://github.com/paradigmxyz/centaur/issues/1111",
+    "https://github.com/paradigmxyz/centaur/issues/1454",
+    "https://github.com/paradigmxyz/centaur/issues/1499",
+)
+SOURCE_COPY_SUFFIXES = {".go", ".rb", ".rs", ".sol", ".ts", ".tsx"}
+SOURCE_COPY_DIRS = {"source-copy", "sources", "upstream", "vendor", "vendored"}
+PROFILE_SYNTHESIS_PATTERNS = (
+    re.compile(r"\bbetter than\b", re.I),
+    re.compile(r"\bworse than\b", re.I),
+    re.compile(r"\boutperform(?:s|ed|ing)?\b", re.I),
+    re.compile(r"\b(?:score|rank)(?:s|ed|ing)?\b", re.I),
+    re.compile(r"\b(?:overall|universal) winner\b", re.I),
+)
+
 MARKDOWN_LINK = re.compile(r"(?<!!)\[[^\]]*\]\(([^)\s]+)")
 GITHUB_BLOB = re.compile(
     r"https://github\.com/([^/]+/[^/]+)/blob/([^/#?\s\"'<>]+)/[^\s)]+"
 )
+H2_HEADING = re.compile(r"^## ([^\n]+)$", re.MULTILINE)
 LOCAL_PATHS = (
     re.compile(r"(?<![A-Za-z0-9])/(?:Users|home)/[^\s`'\"<>]+"),
     re.compile(r"(?i)(?<![A-Za-z0-9])[A-Z]:\\Users\\[^\s`'\"<>]+"),
@@ -242,6 +300,158 @@ def check_blob_links(relative: str, text: str) -> tuple[list[str], set[str]]:
     return errors, subjects
 
 
+def section_text(text: str, heading: str) -> str:
+    """Return one exact H2 section body, or an empty string when absent."""
+
+    match = re.search(
+        rf"^## {re.escape(heading)}\n(.*?)(?=^## |\Z)", text, re.MULTILINE | re.DOTALL
+    )
+    return match.group(1) if match else ""
+
+
+def status_blocks(text: str, label: str) -> list[str]:
+    """Return blank-line-delimited blocks carrying one visible claim status."""
+
+    return [block for block in re.split(r"\n\s*\n", text) if label in block]
+
+
+def check_profile_document(relative: str, text: str) -> list[str]:
+    """Check one symmetric source profile and name the failed rule."""
+
+    errors: list[str] = []
+    subject = PROFILE_FILES.get(relative)
+    if subject is None:
+        return [f"{relative}: profile rule unknown profile path"]
+    source = next(item for item in EXPECTED_SOURCES if item["subject"] == subject)
+
+    headings = tuple(H2_HEADING.findall(text))
+    if headings != PROFILE_HEADINGS:
+        errors.append(
+            f"{relative}: profile-heading-order rule expected {PROFILE_HEADINGS}, got {headings}"
+        )
+    for label in STATUS_LABELS:
+        if label not in text:
+            errors.append(f"{relative}: profile-status rule missing {label}")
+
+    current_blocks = status_blocks(text, "[Current]")
+    if not current_blocks:
+        errors.append(f"{relative}: current-claim-pin rule found no [Current] blocks")
+    for index, block in enumerate(current_blocks, start=1):
+        if source["permalink_base"] not in block:
+            errors.append(
+                f"{relative}: current-claim-pin rule block {index} lacks the {subject} full pin"
+            )
+
+    for index, block in enumerate(status_blocks(text, "[Reported]"), start=1):
+        if "/issues/" in block and not re.search(r"independently\s+reproduc", block, re.I):
+            errors.append(
+                f"{relative}: issue-reproduction rule block {index} lacks a non-reproduction statement"
+            )
+
+    security = " ".join(
+        section_text(text, "Security and trust boundaries").lower().split()
+    )
+    if subject == "shoggoth":
+        for marker in ("fails closed", "does not make", "dedicated local worktree"):
+            if marker not in security:
+                errors.append(
+                    f"{relative}: security-residual-adjacency rule missing {marker!r}"
+                )
+    else:
+        for marker in (
+            "default-deny",
+            "legitimate capabilities",
+            "placeholders",
+            "permissive by default",
+            "issues/1385",
+            "direct postgres",
+        ):
+            if marker not in security:
+                errors.append(
+                    f"{relative}: security-residual-adjacency rule missing {marker!r}"
+                )
+
+    negative = " ".join(section_text(text, "Negative space").lower().split())
+    for marker in ("source-wide bounded search", "automatic"):
+        if marker not in negative:
+            errors.append(f"{relative}: negative-space-scope rule missing {marker!r}")
+    if subject == "shoggoth":
+        if "external shoggoth host" not in negative:
+            errors.append(
+                f"{relative}: negative-space-scope rule must preserve the external-host boundary"
+            )
+    elif "different audit record" not in negative or "no auditability" not in negative:
+        errors.append(
+            f"{relative}: negative-space-scope rule must distinguish Centaur's audit record"
+        )
+
+    if source["permalink_base"] not in text:
+        errors.append(f"{relative}: profile-source rule has no registered source permalink")
+    for pattern in PROFILE_SYNTHESIS_PATTERNS:
+        if pattern.search(text):
+            errors.append(
+                f"{relative}: step-2-synthesis rule rejects {pattern.pattern!r}"
+            )
+    return errors
+
+
+def check_source_ledger(text: str) -> list[str]:
+    """Check the reproducible source ledger's fixed coverage and boundaries."""
+
+    errors: list[str] = []
+    normalised = " ".join(text.split())
+    required_phrases = (
+        "2026-08-26",
+        "live-main observation",
+        "audit_synopsis.py --check .",
+        "whole-set currency",
+        "evidence absence",
+        "not a claim that Centaur",
+        "not independently",
+        "post-pin context",
+        "Negative-evidence searches",
+        "Unknowns",
+        "Update procedure",
+        "does not own or claim Centaur's service responsibilities",
+        "different operational record",
+    )
+    for phrase in required_phrases:
+        if phrase not in normalised:
+            errors.append(f"docs/SOURCES.md: source-ledger rule missing {phrase!r}")
+    for source in EXPECTED_SOURCES:
+        if source["commit"] not in text or source["permalink_base"] not in text:
+            errors.append(
+                f"docs/SOURCES.md: source-ledger-pin rule missing {source['subject']} pin"
+            )
+    for url in LEDGER_PULL_REQUESTS:
+        if url not in text:
+            errors.append(f"docs/SOURCES.md: source-ledger-PR rule missing {url}")
+    for url in LEDGER_ISSUES:
+        if url not in text:
+            errors.append(f"docs/SOURCES.md: source-ledger-issue rule missing {url}")
+    for path in (
+        "plugins/hexaemeron/audit/AUDIT_SYNOPSIS.md",
+        "audit/rounds/fiat-608-bind-the-integrate-gate-to-the-sync-receipt.synopsis.md",
+        "audit/rounds/fiat-510-reuse-source-bound-x-ray-analysis-across-fia.synopsis.md",
+    ):
+        if path not in text:
+            errors.append(f"docs/SOURCES.md: Skills-audit-attribution rule missing {path}")
+    return errors
+
+
+def check_source_copy_inventory(inventory: list[tuple[str, str]]) -> list[str]:
+    """Refuse common upstream source-copy shapes in the analysis repository."""
+
+    errors: list[str] = []
+    for relative, _ in inventory:
+        path = Path(relative)
+        if path.suffix.lower() in SOURCE_COPY_SUFFIXES:
+            errors.append(f"{relative}: source-copying rule rejects upstream-language files")
+        if any(part.lower() in SOURCE_COPY_DIRS for part in path.parts[:-1]):
+            errors.append(f"{relative}: source-copying rule rejects source mirror directories")
+    return errors
+
+
 def inspect_repository(root: Path = ROOT) -> tuple[list[str], list[str]]:
     root = root.resolve()
     errors: list[str] = []
@@ -283,6 +493,8 @@ def inspect_repository(root: Path = ROOT) -> tuple[list[str], list[str]]:
         errors.append(str(exc))
         inventory = []
 
+    errors.extend(check_source_copy_inventory(inventory))
+
     linked_subjects: set[str] = set()
     for relative, text in inventory:
         if relative.endswith(".md"):
@@ -313,17 +525,42 @@ def inspect_repository(root: Path = ROOT) -> tuple[list[str], list[str]]:
 
     try:
         readme = read_text(root, "README.md")
+        methodology = read_text(root, "docs/00-methodology.md")
+        ledger = read_text(root, "docs/SOURCES.md")
         workflow = read_text(root, ".github/workflows/verify.yml")
     except (CheckError, FileNotFoundError):
-        readme = workflow = ""
-    for command in COMMANDS:
+        readme = methodology = ledger = workflow = ""
+    for relative, subject in PROFILE_FILES.items():
+        try:
+            profile = read_text(root, relative)
+        except (CheckError, FileNotFoundError) as exc:
+            errors.append(f"{relative}: profile-read rule failed: {exc}")
+            continue
+        errors.extend(check_profile_document(relative, profile))
+        diagnostics.append(f"PROFILE {subject}: symmetric shape and status checked")
+    errors.extend(check_source_ledger(ledger))
+
+    for command in STEP_COMMANDS:
         if command not in readme:
             errors.append(f"README.md: missing verification command {command}")
+        if command not in methodology:
+            errors.append(f"docs/00-methodology.md: missing verification command {command}")
+    for command in WORKFLOW_COMMANDS:
         if command not in workflow:
             errors.append(f"verify.yml: missing verification command {command}")
     normalised_readme = " ".join(readme.split())
-    if "profiles and comparative conclusions are not written yet" not in normalised_readme:
-        errors.append("README.md: scaffold must not claim profiles or synthesis are complete")
+    required_stage = (
+        "The evidence contract and the two symmetric source profiles are now present. "
+        "Comparative synthesis is deliberately not written until Fiat Step 3."
+    )
+    if required_stage not in normalised_readme:
+        errors.append("README.md: stage rule must expose profiles and defer Step 3 synthesis")
+
+    for relative in PROFILE_FILES:
+        if relative not in readme:
+            errors.append(f"README.md: navigation rule missing {relative}")
+    if "docs/SOURCES.md" not in readme:
+        errors.append("README.md: navigation rule missing docs/SOURCES.md")
 
     diagnostics.append(f"INVENTORY regular UTF-8 files: {len(inventory)}")
     return errors, diagnostics
@@ -338,7 +575,7 @@ def main() -> int:
             print(f"ERROR {error}", file=sys.stderr)
         print(f"RESULT fail: {len(errors)} error(s)", file=sys.stderr)
         return 1
-    print("RESULT pass: evidence and scaffold contract satisfied")
+    print("RESULT pass: evidence, source profiles, and ledger contract satisfied")
     return 0
 
 

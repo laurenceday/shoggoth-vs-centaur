@@ -76,16 +76,196 @@ class ScaffoldTests(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/verify.yml").read_text(encoding="utf-8")
         self.assertIn("permissions:\n  contents: read", workflow)
         self.assertIn("persist-credentials: false", workflow)
-        for command in checker.COMMANDS:
+        for command in checker.WORKFLOW_COMMANDS:
             with self.subTest(command=command):
                 self.assertIn(command, workflow)
 
-    def test_readme_says_profiles_are_not_complete(self) -> None:
+    def test_readme_says_profiles_exist_and_synthesis_is_deferred(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         self.assertIn(
-            "profiles and comparative conclusions are not written yet",
+            "two symmetric source profiles are now present",
             " ".join(readme.split()),
         )
+        self.assertIn("not written until Fiat Step 3", " ".join(readme.split()))
+
+    def test_step_two_commands_are_exposed(self) -> None:
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        methodology = (ROOT / "docs/00-methodology.md").read_text(encoding="utf-8")
+        for command in checker.STEP_COMMANDS:
+            with self.subTest(command=command):
+                self.assertIn(command, readme)
+                self.assertIn(command, methodology)
+
+
+class ProfileContractTests(unittest.TestCase):
+    def _profile(self, relative: str) -> str:
+        return (ROOT / relative).read_text(encoding="utf-8")
+
+    def test_profiles_have_exact_symmetric_heading_inventory(self) -> None:
+        observed = []
+        for relative in checker.PROFILE_FILES:
+            text = self._profile(relative)
+            headings = tuple(checker.H2_HEADING.findall(text))
+            observed.append(headings)
+            self.assertEqual(headings, checker.PROFILE_HEADINGS)
+        self.assertEqual(observed[0], observed[1])
+
+    def test_profiles_carry_all_five_visible_status_labels(self) -> None:
+        for relative in checker.PROFILE_FILES:
+            text = self._profile(relative)
+            with self.subTest(relative=relative):
+                for label in checker.STATUS_LABELS:
+                    self.assertIn(label, text)
+
+    def test_every_current_profile_block_has_its_registered_pin(self) -> None:
+        for relative in checker.PROFILE_FILES:
+            errors = checker.check_profile_document(relative, self._profile(relative))
+            current_errors = [error for error in errors if "current-claim-pin" in error]
+            with self.subTest(relative=relative):
+                self.assertEqual(current_errors, [])
+
+    def test_mutable_current_claim_link_is_rejected_with_named_rule(self) -> None:
+        relative = "docs/01-shoggoth.md"
+        source = checker.EXPECTED_SOURCES[0]
+        hostile = self._profile(relative).replace(source["permalink_base"], "https://github.com/wildcat-finance/skills/blob/main/", 1)
+        errors = checker.check_profile_document(relative, hostile)
+        self.assertTrue(any("current-claim-pin rule" in error for error in errors))
+
+    def test_reported_issue_without_non_reproduction_is_rejected(self) -> None:
+        relative = "docs/02-centaur.md"
+        text = self._profile(relative)
+        hostile = text.replace(
+            "This study verified that configuration split in source but did not\nindependently reproduce a deployed bypass.",
+            "This study treats the report as deployed behaviour.",
+        )
+        errors = checker.check_profile_document(relative, hostile)
+        self.assertTrue(any("issue-reproduction rule" in error for error in errors))
+
+    def test_shoggoth_security_control_and_residual_are_adjacent(self) -> None:
+        text = checker.section_text(
+            self._profile("docs/01-shoggoth.md"), "Security and trust boundaries"
+        ).lower()
+        self.assertIn("fails closed", text)
+        self.assertIn("does not make", text)
+        self.assertIn("dedicated local worktree", text)
+
+    def test_centaur_security_controls_and_residuals_are_adjacent(self) -> None:
+        text = checker.section_text(
+            self._profile("docs/02-centaur.md"), "Security and trust boundaries"
+        ).lower()
+        for marker in (
+            "default-deny",
+            "legitimate capabilities",
+            "placeholders",
+            "permissive by default",
+            "issues/1385",
+            "direct postgres",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, text)
+
+    def test_shoggoth_negative_space_is_repository_scoped(self) -> None:
+        text = checker.section_text(
+            self._profile("docs/01-shoggoth.md"), "Negative space"
+        )
+        self.assertIn("source-wide bounded search", text)
+        self.assertIn("does not own or", text)
+        self.assertIn("external\nShoggoth host", text)
+        self.assertIn("not automatic defects", text)
+
+    def test_centaur_negative_space_preserves_different_audit_record(self) -> None:
+        text = checker.section_text(
+            self._profile("docs/02-centaur.md"), "Negative space"
+        )
+        self.assertIn("source-wide bounded search", text)
+        self.assertIn("different audit record", text)
+        self.assertIn("no auditability", text)
+        self.assertIn("not an\nautomatic platform defect", text)
+
+    def test_profile_contract_errors_name_document_and_rule(self) -> None:
+        relative = "docs/01-shoggoth.md"
+        hostile = self._profile(relative).replace("## Purpose", "## Mission", 1)
+        errors = checker.check_profile_document(relative, hostile)
+        self.assertTrue(any(error.startswith(relative) for error in errors))
+        self.assertTrue(any("profile-heading-order rule" in error for error in errors))
+
+    def test_step_two_profile_rejects_comparative_ranking_language(self) -> None:
+        relative = "docs/01-shoggoth.md"
+        hostile = self._profile(relative) + "\nShoggoth is better than the other subject.\n"
+        errors = checker.check_profile_document(relative, hostile)
+        self.assertTrue(any("step-2-synthesis rule" in error for error in errors))
+
+
+class SourceLedgerTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.ledger = (ROOT / "docs/SOURCES.md").read_text(encoding="utf-8")
+
+    def test_ledger_contains_exact_pins_and_observation_date(self) -> None:
+        self.assertIn("2026-08-26", self.ledger)
+        for source in checker.EXPECTED_SOURCES:
+            with self.subTest(subject=source["subject"]):
+                self.assertIn(source["commit"], self.ledger)
+                self.assertIn(source["permalink_base"], self.ledger)
+
+    def test_ledger_covers_last_and_capability_pull_requests(self) -> None:
+        for url in checker.LEDGER_PULL_REQUESTS:
+            with self.subTest(url=url):
+                self.assertIn(url, self.ledger)
+
+    def test_ledger_covers_current_and_post_pin_issues(self) -> None:
+        for url in checker.LEDGER_ISSUES:
+            with self.subTest(url=url):
+                self.assertIn(url, self.ledger)
+        self.assertIn("post-pin context", self.ledger)
+
+    def test_skills_audit_views_have_whole_set_attribution(self) -> None:
+        self.assertIn("audit_synopsis.py --check .", self.ledger)
+        self.assertIn("whole-set currency", self.ledger)
+        for path in (
+            "plugins/hexaemeron/audit/AUDIT_SYNOPSIS.md",
+            "audit/rounds/fiat-608-bind-the-integrate-gate-to-the-sync-receipt.synopsis.md",
+            "audit/rounds/fiat-510-reuse-source-bound-x-ray-analysis-across-fia.synopsis.md",
+        ):
+            with self.subTest(path=path):
+                self.assertIn(path, self.ledger)
+
+    def test_centaur_audit_absence_is_an_evidence_boundary(self) -> None:
+        self.assertIn("evidence absence", self.ledger)
+        self.assertIn("not a claim that Centaur", self.ledger)
+        self.assertIn("does not assign an audit verdict", self.ledger)
+
+    def test_issue_reports_are_not_presented_as_reproduced(self) -> None:
+        self.assertIn("None was independently\nreproduced", self.ledger)
+        self.assertIn("not\n  independently reproduced", self.ledger)
+
+    def test_negative_evidence_searches_are_bounded(self) -> None:
+        self.assertIn("## Negative-evidence searches", self.ledger)
+        self.assertIn("does not own or claim Centaur's service responsibilities", self.ledger)
+        self.assertIn("different operational\nrecord", self.ledger)
+        self.assertIn("nothing universal about external hosts", self.ledger)
+
+    def test_ledger_records_unknowns_and_update_procedure(self) -> None:
+        self.assertIn("## Unknowns", self.ledger)
+        self.assertIn("## Update procedure", self.ledger)
+        self.assertIn("Update both profiles and this ledger in the same change", self.ledger)
+
+    def test_source_ledger_checker_is_clean(self) -> None:
+        self.assertEqual(checker.check_source_ledger(self.ledger), [])
+
+
+class SourceCopyGuardTests(unittest.TestCase):
+    def test_current_inventory_contains_no_upstream_source_copy_shape(self) -> None:
+        inventory = checker.iter_text(ROOT)
+        self.assertEqual(checker.check_source_copy_inventory(inventory), [])
+
+    def test_upstream_language_file_is_rejected(self) -> None:
+        errors = checker.check_source_copy_inventory([("vendor/session.rs", "fn main() {}")])
+        self.assertTrue(any("source-copying rule" in error for error in errors))
+
+    def test_source_mirror_directory_is_rejected(self) -> None:
+        errors = checker.check_source_copy_inventory([("upstream/README.md", "copy")])
+        self.assertTrue(any("source-copying rule" in error for error in errors))
 
 
 class HostileInputTests(unittest.TestCase):
@@ -101,6 +281,14 @@ class HostileInputTests(unittest.TestCase):
         self.assertEqual(subjects, set())
         self.assertEqual(len(errors), 1)
         self.assertIn("not pinned", errors[0])
+
+    def test_every_document_blob_link_uses_a_registered_full_pin(self) -> None:
+        for relative, text in checker.iter_text(ROOT):
+            if not relative.endswith(".md"):
+                continue
+            errors, _ = checker.check_blob_links(relative, text)
+            with self.subTest(relative=relative):
+                self.assertEqual(errors, [])
 
     def test_relative_link_escape_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
