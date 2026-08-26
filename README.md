@@ -30,8 +30,8 @@ python3 scripts/run_tests.py --report .elenchus/shoggoth-vs-centaur-step-2.json
 python3 -m unittest discover -s tests
 ```
 
-The GitHub workflow runs the same commands with read-only repository
-permission and no secrets.
+The GitHub workflow runs the same checker and test suite with read-only
+repository permission and does not persist checkout credentials.
 
 ## Rights
 

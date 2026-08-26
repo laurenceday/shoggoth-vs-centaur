@@ -93,6 +93,10 @@ PROFILE_HEADINGS = (
     "Evidence limits",
 )
 STATUS_LABELS = ("[Current]", "[Inferred]", "[Reported]", "[Planned]", "[Unknown]")
+CLAIM_START = re.compile(
+    r"^[ \t]{0,3}(?:[-*+] )?(" + "|".join(map(re.escape, STATUS_LABELS)) + r")(?=\s)",
+    re.MULTILINE,
+)
 LEDGER_PULL_REQUESTS = (
     "https://github.com/wildcat-finance/skills/pull/648",
     "https://github.com/wildcat-finance/skills/pull/649",
@@ -236,7 +240,17 @@ def iter_text(root: Path) -> list[tuple[str, str]]:
         for name in sorted(filenames):
             path = directory / name
             relative = path.relative_to(root).as_posix()
-            if name != "LICENSE" and path.suffix not in TEXT_SUFFIXES:
+            suffix = path.suffix.lower()
+            source_mirror = any(
+                part.lower() in SOURCE_COPY_DIRS
+                for part in Path(relative).parts[:-1]
+            )
+            if (
+                name != "LICENSE"
+                and suffix not in TEXT_SUFFIXES
+                and suffix not in SOURCE_COPY_SUFFIXES
+                and not source_mirror
+            ):
                 continue
             if path.is_symlink():
                 raise CheckError(f"symlink is not accepted: {relative}")
@@ -310,9 +324,16 @@ def section_text(text: str, heading: str) -> str:
 
 
 def status_blocks(text: str, label: str) -> list[str]:
-    """Return blank-line-delimited blocks carrying one visible claim status."""
+    """Return claims that begin with one visible status, including adjacent bullets."""
 
-    return [block for block in re.split(r"\n\s*\n", text) if label in block]
+    starts = list(CLAIM_START.finditer(text))
+    blocks: list[str] = []
+    for index, match in enumerate(starts):
+        if match.group(1) != label:
+            continue
+        end = starts[index + 1].start() if index + 1 < len(starts) else len(text)
+        blocks.append(text[match.start() : end])
+    return blocks
 
 
 def check_profile_document(relative: str, text: str) -> list[str]:

@@ -124,6 +124,17 @@ class ProfileContractTests(unittest.TestCase):
             with self.subTest(relative=relative):
                 self.assertEqual(current_errors, [])
 
+    def test_each_adjacent_current_claim_requires_its_own_pin(self) -> None:
+        relative = "docs/01-shoggoth.md"
+        hostile = self._profile(relative).replace(
+            "([Domain inventory](https://github.com/wildcat-finance/skills/blob/"
+            "58b7dcd1004bf8e6b0cf517bbcc778789e2c43ff/README.md#L129-L172))",
+            "(source citation removed)",
+            1,
+        )
+        errors = checker.check_profile_document(relative, hostile)
+        self.assertTrue(any("current-claim-pin rule" in error for error in errors))
+
     def test_mutable_current_claim_link_is_rejected_with_named_rule(self) -> None:
         relative = "docs/01-shoggoth.md"
         source = checker.EXPECTED_SOURCES[0]
@@ -137,6 +148,16 @@ class ProfileContractTests(unittest.TestCase):
         hostile = text.replace(
             "This study verified that configuration split in source but did not\nindependently reproduce a deployed bypass.",
             "This study treats the report as deployed behaviour.",
+        )
+        errors = checker.check_profile_document(relative, hostile)
+        self.assertTrue(any("issue-reproduction rule" in error for error in errors))
+
+    def test_each_adjacent_reported_issue_needs_non_reproduction_boundary(self) -> None:
+        relative = "docs/02-centaur.md"
+        hostile = self._profile(relative).replace(
+            "This study did not independently reproduce the report.",
+            "The report remains open.",
+            1,
         )
         errors = checker.check_profile_document(relative, hostile)
         self.assertTrue(any("issue-reproduction rule" in error for error in errors))
@@ -262,6 +283,30 @@ class SourceCopyGuardTests(unittest.TestCase):
     def test_upstream_language_file_is_rejected(self) -> None:
         errors = checker.check_source_copy_inventory([("vendor/session.rs", "fn main() {}")])
         self.assertTrue(any("source-copying rule" in error for error in errors))
+
+    def test_repository_inventory_exposes_upstream_language_files_to_guard(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "session.rs").write_text("fn main() {}\n", encoding="utf-8")
+            errors = checker.check_source_copy_inventory(checker.iter_text(root))
+        self.assertTrue(any("source-copying rule" in error for error in errors))
+
+    def test_repository_inventory_exposes_source_mirror_files_to_guard(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            mirror = root / "upstream"
+            mirror.mkdir()
+            (mirror / "snapshot.txt").write_text("copied source\n", encoding="utf-8")
+            errors = checker.check_source_copy_inventory(checker.iter_text(root))
+        self.assertTrue(any("source-copying rule" in error for error in errors))
+
+    def test_source_named_parent_outside_repository_is_not_a_mirror(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "sources" / "analysis"
+            root.mkdir(parents=True)
+            (root / "README.md").write_text("original analysis\n", encoding="utf-8")
+            errors = checker.check_source_copy_inventory(checker.iter_text(root))
+        self.assertEqual(errors, [])
 
     def test_source_mirror_directory_is_rejected(self) -> None:
         errors = checker.check_source_copy_inventory([("upstream/README.md", "copy")])
