@@ -6,13 +6,15 @@ what each is for, what layer it occupies, and where their responsibilities may
 complement or compete. It will not copy either project, choose a winner, or
 design an integration.
 
-This first Fiat step establishes the evidence contract and validation
-scaffold. The two source profiles and comparative conclusions are not written
-yet.
+The evidence contract and the two symmetric source profiles are now present.
+Comparative synthesis is deliberately not written until Fiat Step 3.
 
 ## Read now
 
 - [Method and source policy](docs/00-methodology.md)
+- [Shoggoth profile](docs/01-shoggoth.md)
+- [Centaur profile](docs/02-centaur.md)
+- [Reproducible source ledger](docs/SOURCES.md)
 - [Layer-aware comparison decision](docs/decisions/ADR-001-layer-aware-comparison.md)
 - [Fiat study](docs/fiat-study.md)
 - [Fiat runbook](docs/fiat-runbook.md)
@@ -24,12 +26,12 @@ The checks are offline and use only Python's standard library:
 
 ```bash
 python3 scripts/check_repository.py
-python3 scripts/run_tests.py --report .elenchus/shoggoth-vs-centaur-step-1.json
+python3 scripts/run_tests.py --report .elenchus/shoggoth-vs-centaur-step-2.json
 python3 -m unittest discover -s tests
 ```
 
-The GitHub workflow runs the same commands with read-only repository
-permission and no secrets.
+The GitHub workflow runs the same checker and test suite with read-only
+repository permission and does not persist checkout credentials.
 
 ## Rights
 
