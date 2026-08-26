@@ -1,6 +1,6 @@
 # Shoggoth versus Centaur
 
-This private repository is a source-bound comparison of the Shoggoth
+This public repository is a source-bound comparison of the Shoggoth
 agent-and-skill collective and Paradigm's Centaur team-agent platform. It asks
 what each is for, what layer it occupies, and where their responsibilities may
 complement or compete. It will not copy either project, choose a winner, or
