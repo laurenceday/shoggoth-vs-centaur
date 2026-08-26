@@ -22,10 +22,14 @@ recorded separately from source-code claims.
 
 The comparison starts with a responsibility distinction:
 
-| Subject | Primary layer | Unit of work | State it owns |
-| --- | --- | --- | --- |
-| Shoggoth | Governed specialist instructions and repository delivery | A bounded skill operation or receipted delivery step | Evidence contracts, delivery records, branches, and pull requests |
-| Centaur | Shared agent service and execution control | A durable session, execution, tool call, or workflow run | Service, workflow, sandbox, event, principal, and delivery state |
+**Shoggoth.** Its primary layer is governed specialist instructions and
+repository delivery. Its unit of work is a bounded skill operation or
+receipted delivery step. It owns evidence contracts, delivery records,
+branches, and pull requests.
+
+**Centaur.** Its primary layer is shared agent service and execution control.
+Its unit of work is a durable session, execution, tool call, or workflow run.
+It owns service, workflow, sandbox, event, principal, and delivery state.
 
 This is a method, not a verdict. Later documents must retain genuine overlap
 and ask each system the same questions at the layer it claims.
@@ -55,7 +59,7 @@ winner.
 Complementarity is conceptual only. This repository will not specify,
 prototype, recommend, or estimate an adapter, port, migration, embedding,
 shared plugin, or integration. It contains original analysis, short
-identifiers, and links—not copied source or long upstream passages.
+identifiers, and links, not copied source or long upstream passages.
 
 ## Reproduction and update
 
