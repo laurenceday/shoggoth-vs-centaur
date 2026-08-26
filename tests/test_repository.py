@@ -154,40 +154,63 @@ class ElenchusReportTests(unittest.TestCase):
         result = unittest.TestResult()
         result.testsRun = 3
         result.skipped = [("case", "reason")]
-        report = elenchus_runner.build_report(result, 0.125)
+        report = elenchus_runner.build_report(result)
         self.assertEqual(
             set(report),
             {
-                "contract",
-                "tests_run",
+                "schema",
+                "testsRun",
                 "failures",
                 "errors",
-                "skips",
+                "skipped",
                 "complete",
-                "exit_status",
-                "duration_seconds",
+                "expectedFailures",
+                "unexpectedSuccesses",
             },
         )
-        self.assertEqual(report["contract"], "elenchus.unittest.v1")
+        self.assertEqual(report["schema"], "elenchus.unittest.v1")
         self.assertTrue(report["complete"])
-        self.assertEqual(report["exit_status"], 0)
+        self.assertEqual(elenchus_runner.report_exit_status(report), 0)
 
     def test_zero_test_report_is_not_a_pass(self) -> None:
-        report = elenchus_runner.build_report(unittest.TestResult(), 0.0)
-        self.assertEqual(report["tests_run"], 0)
-        self.assertEqual(report["exit_status"], 1)
+        report = elenchus_runner.build_report(unittest.TestResult())
+        self.assertEqual(report["testsRun"], 0)
+        self.assertEqual(elenchus_runner.report_exit_status(report), 1)
 
     def test_incomplete_report_is_not_a_pass(self) -> None:
         result = unittest.TestResult()
         result.testsRun = 1
         result.complete = False
-        report = elenchus_runner.build_report(result, 0.0)
+        report = elenchus_runner.build_report(result)
         self.assertFalse(report["complete"])
-        self.assertEqual(report["exit_status"], 1)
+        self.assertEqual(elenchus_runner.report_exit_status(report), 1)
+
+    def test_unexpected_success_is_not_a_pass(self) -> None:
+        result = unittest.TestResult()
+        result.testsRun = 1
+        result.unexpectedSuccesses = ["case"]
+        report = elenchus_runner.build_report(result)
+        self.assertEqual(report["unexpectedSuccesses"], 1)
+        self.assertEqual(elenchus_runner.report_exit_status(report), 1)
 
     def test_report_path_escape_is_rejected(self) -> None:
-        with self.assertRaisesRegex(ValueError, "stay relative"):
+        with self.assertRaisesRegex(ValueError, "stay inside"):
             elenchus_runner.safe_report_path("../outside.json")
+
+    def test_absolute_report_path_inside_repository_is_accepted(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            expected = root / ".elenchus" / "report.json"
+            observed = elenchus_runner.safe_report_path(str(expected), root)
+            self.assertEqual(observed, expected.resolve(strict=False))
+
+    def test_absolute_report_path_outside_repository_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "repository"
+            root.mkdir()
+            outside = Path(directory) / "outside.json"
+            with self.assertRaisesRegex(ValueError, "stay inside"):
+                elenchus_runner.safe_report_path(str(outside), root)
 
 
 class WholeRepositoryTests(unittest.TestCase):

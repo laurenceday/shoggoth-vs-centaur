@@ -9,7 +9,6 @@ import os
 import stat
 import sys
 import tempfile
-import time
 import unittest
 from pathlib import Path
 
@@ -18,30 +17,47 @@ ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = "elenchus.unittest.v1"
 
 
-def build_report(result: unittest.TestResult, duration_seconds: float) -> dict:
-    failures = len(result.failures)
-    errors = len(result.errors)
-    tests_run = result.testsRun
-    skips = len(getattr(result, "skipped", ()))
-    complete = bool(getattr(result, "complete", True))
-    passed = complete and tests_run > 0 and failures == 0 and errors == 0
+def build_report(result: unittest.TestResult) -> dict:
+    """Return the exact payload accepted by Elenchus ``unittest-json-v1``."""
+
     return {
-        "contract": CONTRACT,
-        "tests_run": tests_run,
-        "failures": failures,
-        "errors": errors,
-        "skips": skips,
-        "complete": complete,
-        "exit_status": 0 if passed else 1,
-        "duration_seconds": round(duration_seconds, 6),
+        "schema": CONTRACT,
+        "complete": bool(getattr(result, "complete", True)),
+        "testsRun": result.testsRun,
+        "failures": len(result.failures),
+        "errors": len(result.errors),
+        "skipped": len(getattr(result, "skipped", ())),
+        "expectedFailures": len(getattr(result, "expectedFailures", ())),
+        "unexpectedSuccesses": len(getattr(result, "unexpectedSuccesses", ())),
     }
+
+
+def report_exit_status(report: dict) -> int:
+    passed = (
+        report["complete"]
+        and report["testsRun"] > 0
+        and report["failures"] == 0
+        and report["errors"] == 0
+        and report["unexpectedSuccesses"] == 0
+    )
+    return 0 if passed else 1
 
 
 def safe_report_path(raw: str, root: Path = ROOT) -> Path:
     root = root.resolve()
-    relative = Path(raw)
-    if not raw or relative.is_absolute() or ".." in relative.parts:
-        raise ValueError("report path must stay relative to the repository")
+    candidate = Path(raw)
+    if not raw:
+        raise ValueError("report path must not be empty")
+    if candidate.is_absolute():
+        candidate = candidate.resolve(strict=False)
+        try:
+            relative = candidate.relative_to(root)
+        except ValueError as exc:
+            raise ValueError("report path must stay inside the repository") from exc
+    else:
+        relative = candidate
+    if ".." in relative.parts:
+        raise ValueError("report path must stay inside the repository")
     if relative.suffix != ".json":
         raise ValueError("report path must end in .json")
 
@@ -105,14 +121,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"report path rejected: {exc}", file=sys.stderr)
         return 2
 
-    started = time.perf_counter()
     suite = unittest.defaultTestLoader.discover(str(ROOT / "tests"))
     runner = unittest.TextTestRunner(stream=sys.stderr, verbosity=2)
     result = runner.run(suite)
-    report = build_report(result, time.perf_counter() - started)
+    report = build_report(result)
     write_report(destination, report)
     print(json.dumps(report, sort_keys=True))
-    return report["exit_status"]
+    return report_exit_status(report)
 
 
 if __name__ == "__main__":
