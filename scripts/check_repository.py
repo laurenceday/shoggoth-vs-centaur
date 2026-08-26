@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import hashlib
+import html
 import json
 import os
 import re
@@ -27,6 +28,9 @@ REQUIRED_FILES = (
     "docs/00-methodology.md",
     "docs/01-shoggoth.md",
     "docs/02-centaur.md",
+    "docs/03-comparison-matrix.md",
+    "docs/04-complement-and-competition.md",
+    "docs/05-decision-guide.md",
     "docs/SOURCES.md",
     "docs/decisions/ADR-001-layer-aware-comparison.md",
     "docs/fiat-study.md",
@@ -39,12 +43,12 @@ REQUIRED_FILES = (
 )
 STEP_COMMANDS = (
     "python3 scripts/check_repository.py",
-    "python3 scripts/run_tests.py --report .elenchus/shoggoth-vs-centaur-step-2.json",
+    "python3 scripts/run_tests.py --report .elenchus/shoggoth-vs-centaur-step-3.json",
     "python3 -m unittest discover -s tests",
 )
 WORKFLOW_COMMANDS = (
     "python3 scripts/check_repository.py",
-    "python3 scripts/run_tests.py --report .elenchus/shoggoth-vs-centaur-step-1.json",
+    "python3 scripts/run_tests.py --report .elenchus/shoggoth-vs-centaur-step-3.json",
     "python3 -m unittest discover -s tests",
 )
 EXPECTED_SOURCES = (
@@ -129,11 +133,298 @@ PROFILE_SYNTHESIS_PATTERNS = (
     re.compile(r"\b(?:overall|universal) winner\b", re.I),
 )
 
+MATRIX_FILE = "docs/03-comparison-matrix.md"
+COMPLEMENT_FILE = "docs/04-complement-and-competition.md"
+DECISION_FILE = "docs/05-decision-guide.md"
+SYNTHESIS_FILES = (MATRIX_FILE, COMPLEMENT_FILE, DECISION_FILE)
+READER_ANALYSIS_FILES = (
+    "README.md",
+    "docs/00-methodology.md",
+    *PROFILE_FILES,
+    *SYNTHESIS_FILES,
+    "docs/SOURCES.md",
+    "docs/decisions/ADR-001-layer-aware-comparison.md",
+)
+MATRIX_AXES = (
+    "Intended user",
+    "Deployment shape",
+    "Unit of isolation",
+    "State and recovery",
+    "Skill/instruction model",
+    "Tools",
+    "Workflows",
+    "Multi-agent work",
+    "Credentials",
+    "Evidence/audit",
+    "Release/delivery",
+    "Extension model",
+    "Operating burden",
+)
+MATRIX_HEADER = (
+    "Responsibility axis",
+    "Shoggoth",
+    "Centaur",
+    "Responsibility difference",
+)
+MATRIX_HEADINGS = ("Responsibility matrix", "Evidence and reading limits")
+COMPLEMENT_HEADINGS = (
+    "Conceptual complement",
+    "Competitive overlap",
+    "No-integration boundary",
+    "Evidence limits",
+)
+COMPETITION_HEADINGS = (
+    "Skill and instruction distribution",
+    "Workflow conventions",
+    "Multi-agent coordination",
+    "Extension mechanisms",
+    "Audit story",
+    "Behavioural standardisation",
+)
+DECISION_HEADINGS = (
+    "Is the primary problem evidence-bounded agent work and repository delivery?",
+    "Is the primary problem shared operated sessions, isolation, state, and credentials?",
+    "Is the primary problem an overlap responsibility?",
+    "Do both layers need separate evaluation?",
+    "Does neither pin prove the answer?",
+)
+README_NAVIGATION = (
+    "docs/00-methodology.md",
+    "docs/01-shoggoth.md",
+    "docs/02-centaur.md",
+    MATRIX_FILE,
+    COMPLEMENT_FILE,
+    DECISION_FILE,
+    "docs/SOURCES.md",
+    "docs/decisions/ADR-001-layer-aware-comparison.md",
+    "docs/fiat-study.md",
+    "docs/fiat-runbook.md",
+    "audit/rounds/fiat-shoggoth-versus-centaur-purpose-capabilities-str.synopsis.md",
+)
+PRODUCT_VERDICT_PATTERNS = (
+    re.compile(r"\b(?:choose|select|adopt|buy)\s+(?:Shoggoth|Centaur)\b", re.I),
+    re.compile(r"\bprefer(?:red)?\s+(?:Shoggoth|Centaur)\b", re.I),
+    re.compile(r"\b(?:Shoggoth|Centaur)\s+wins?\b", re.I),
+    re.compile(
+        r"\bbest\s+(?:choice|option|product|fit)\s*:\s*"
+        r"(?:Shoggoth|Centaur)\b",
+        re.I,
+    ),
+    re.compile(r"\b(?:Shoggoth|Centaur)\s+is\s+(?:the\s+)?superior\b", re.I),
+    re.compile(
+        r"\b(?:Shoggoth|Centaur)\s+is\s+(?:the\s+)?"
+        r"(?:better|best|preferred|recommended)\s+"
+        r"(?:choice|option|product|fit)\b",
+        re.I,
+    ),
+    re.compile(
+        r"\brecommended\s+(?:choice|option|product)\s*:\s*"
+        r"(?:Shoggoth|Centaur)\b",
+        re.I,
+    ),
+    re.compile(r"\brecommend(?:s|ed|ing)?\s+(?:Shoggoth|Centaur)\b", re.I),
+)
+MATRIX_RANKING_PATTERNS = (
+    re.compile(r"\bscore(?:s|d|ing)?\b", re.I),
+    re.compile(r"\bratings?\b|\brated\b", re.I),
+    re.compile(r"\brank(?:s|ed|ing)?\b", re.I),
+    re.compile(r"\bwinner\b", re.I),
+    re.compile(r"(?:\b\d+(?:\.\d+)?\s+stars?\b|\bstars?\s*:\s*\d)", re.I),
+    re.compile(r"(?:\b\d+(?:\.\d+)?\s+points?\b|\bpoints?\s*:\s*\d)", re.I),
+    re.compile(r"\bprocurement recommendation\b", re.I),
+    re.compile(r"\b(?:better|worse|stronger|weaker)\s+(?:choice|option|product|fit)\b", re.I),
+    re.compile(r"\brecommended\s+(?:choice|option|product)\b", re.I),
+    re.compile(r"\b\d+(?:\.\d+)?\s*/\s*\d+(?:\.\d+)?\b"),
+    *PRODUCT_VERDICT_PATTERNS,
+)
+ACTIONABLE_INTEGRATION_PATTERNS = (
+    re.compile(
+        r"^#{2,4}\s+(?:adapter|api map|interface map|combined architecture|"
+        r"integration(?: plan| design| architecture)?|interoperability(?: plan)?|"
+        r"bridge(?: design| plan)?|migration|implementation|embedding|dependencies?)\b",
+        re.I | re.MULTILINE,
+    ),
+    re.compile(r"\b(?:GET|POST|PUT|PATCH|DELETE)\s+/[A-Za-z0-9]"),
+    re.compile(
+        r"\b(?:Step|Phase)\s+\d+\s*:[^\n]{0,160}\b(?:"
+        r"(?:connect|integrate|embed|bridge|wire|pair|attach|migrate|port)\b"
+        r"[^\n]{0,120}\b(?:systems?|projects?|platforms?|Shoggoth|Centaur|both)|"
+        r"(?:build|create|design|implement)\b[^\n]{0,80}\b"
+        r"(?:adapter|integration|bridge|connector|combined architecture))\b",
+        re.I,
+    ),
+    re.compile(
+        r"^(?:[ \t]{0,3}(?:[-*+] |\d+\. )?)"
+        r"(?:Build|Create|Design|Implement)\s+(?:an?\s+|the\s+)?"
+        r"(?:adapter|integration|bridge|connector)\b",
+        re.MULTILINE,
+    ),
+    re.compile(
+        r"\b(?:we|this repository|the (?:project|design|team))\s+"
+        r"(?:will|should|must|can)\s+(?:build|create|design|implement)\s+"
+        r"(?:an?\s+|the\s+)?(?:adapter|integration|bridge|connector)\b",
+        re.I,
+    ),
+    re.compile(
+        r"\b(?:plan|proposal|recommendation)\s+(?:is\s+)?to\s+"
+        r"(?:build|create|design|implement)\s+(?:an?\s+|the\s+)?"
+        r"(?:adapter|integration|bridge|connector)\b",
+        re.I,
+    ),
+    re.compile(
+        r"\b(?:Shoggoth|Centaur)\s+(?:calls|invokes|embeds|depends on)\s+"
+        r"(?:Shoggoth|Centaur)\b",
+        re.I,
+    ),
+    re.compile(
+        r"\b(?:connect|embed|integrate|bridge|wire)\s+(?:the\s+)?"
+        r"(?:Shoggoth|Centaur)\b[^.\n]{0,80}\b(?:with|to|into|in)\s+"
+        r"(?:the\s+)?(?:Shoggoth|Centaur)\b",
+        re.I,
+    ),
+    re.compile(
+        r"\bpair\s+(?:the\s+)?(?:Shoggoth|Centaur)\b[^.\n]{0,80}"
+        r"\bwith\s+(?:the\s+)?(?:Shoggoth|Centaur)\b[^.\n]{0,80}"
+        r"\b(?:runtime|session|deployment|workflow|sandbox|service|tools?|"
+        r"architecture|integration)\b",
+        re.I,
+    ),
+    re.compile(
+        r"\battach\s+(?:the\s+)?(?:Shoggoth|Centaur)\b[^.\n]{0,60}"
+        r"\b(?:skills?|instructions?|workflows?|tools?|capabilities?)\b[^.\n]{0,60}"
+        r"\b(?:to|into|onto)\s+(?:the\s+)?(?:Shoggoth|Centaur)\b",
+        re.I,
+    ),
+    re.compile(
+        r"\buse\s+both\s+(?:the\s+)?(?:Shoggoth|Centaur)\b[^.\n]{0,40}"
+        r"\b(?:and|with)\s+(?:the\s+)?(?:Shoggoth|Centaur)\b[^.\n]{0,80}"
+        r"\b(?:runtime|session|deployment|workflow|sandbox|service|tools?|"
+        r"architecture|integration)\b",
+        re.I,
+    ),
+    re.compile(
+        r"\bmap\s+(?:the\s+)?(?:Shoggoth|Centaur)\b[^.\n]{0,100}"
+        r"\b(?:onto|to|into)\s+(?:the\s+)?(?:Shoggoth|Centaur)\b",
+        re.I,
+    ),
+    re.compile(
+        r"\b(?:migrate|port)\s+(?:the\s+)?(?:Shoggoth|Centaur)\b"
+        r"[^.\n]{0,80}\b(?:to|into)\s+(?:the\s+)?(?:Shoggoth|Centaur)\b",
+        re.I,
+    ),
+    re.compile(
+        r"\buse\s+(?:the\s+)?(?:Shoggoth|Centaur)\b[^.\n]{0,80}"
+        r"\b(?:inside|within|under)\s+(?:the\s+)?(?:Shoggoth|Centaur)\b",
+        re.I,
+    ),
+    re.compile(
+        r"\bexpose\s+(?:the\s+)?(?:Shoggoth|Centaur)\b[^.\n]{0,80}"
+        r"\bas\s+(?:the\s+)?(?:Shoggoth|Centaur)\b",
+        re.I,
+    ),
+    re.compile(
+        r"\bmake\s+(?:the\s+)?(?:Shoggoth|Centaur)\b[^.\n]{0,40}"
+        r"\bdepend(?:s|ed|ing)?\s+on\s+(?:the\s+)?(?:Shoggoth|Centaur)\b",
+        re.I,
+    ),
+    re.compile(
+        r"\bconfigure\s+(?:the\s+)?(?:Shoggoth|Centaur)\b[^.\n]{0,40}"
+        r"\bto\s+(?:load|run|invoke|embed)\s+(?:the\s+)?"
+        r"(?:Shoggoth|Centaur)\b",
+        re.I,
+    ),
+    re.compile(
+        r"\b(?:combined|joint)\s+(?:architecture|deployment)\s+"
+        r"(?:would|will|should|can)\b",
+        re.I,
+    ),
+    re.compile(
+        r"\b(?:deploy|run|operate|use)\s+(?:the\s+)?"
+        r"(?:Shoggoth|Centaur)\b[^.\n]{0,40}\b(?:and|with)\s+"
+        r"(?:the\s+)?(?:Shoggoth|Centaur)\b[^.\n]{0,20}\btogether\b",
+        re.I,
+    ),
+    re.compile(
+        r"\b(?:Shoggoth\s+(?:and|with)\s+Centaur|"
+        r"Centaur\s+(?:and|with)\s+Shoggoth)\s+(?:are|is)\s+"
+        r"(?:interoperable|compatible)\b",
+        re.I,
+    ),
+    re.compile(
+        r"(?<!not )(?<!never )\brecommend(?:s|ed|ing)?\s+"
+        r"(?:using|adopting|combining|deploying)\s+"
+        r"(?:Shoggoth\s+(?:and|with)\s+Centaur|"
+        r"Centaur\s+(?:and|with)\s+Shoggoth|both(?:\s+(?:systems|projects))?)"
+        r"(?:\s+together)?\b",
+        re.I,
+    ),
+    re.compile(
+        r"\b(?:combined\s+deployment|integration|adapter|migration|bridge)\b"
+        r"[^.\n]{0,80}\b(?:costs?|budget|price|estimate)\b[^.\n]{0,32}"
+        r"(?:[$£€]\s*\d|\d[\d,.]*\s*(?:USD|GBP|EUR|dollars?|pounds?|euros?))",
+        re.I,
+    ),
+    re.compile(r"```mermaid", re.I),
+)
+
+NEGATED_ACTION_PREFIX = re.compile(
+    r"(?:\b(?:do|does|did|is|are|was|were|will|would|should|must|can|could)\s+not|"
+    r"\b(?:don't|doesn't|didn't|isn't|aren't|wasn't|weren't|won't|wouldn't|"
+    r"shouldn't|mustn't|can't|couldn't|never|not|cannot))\s+$",
+    re.I,
+)
+NEGATED_INTEGRATION_ACTION = re.compile(
+    r"\b(?:do|does|did|will|would|should|must|can|could)\s+not\s+"
+    r"(?:connect|integrate|embed|bridge|wire|pair|attach|migrate|port|use|build|"
+    r"create|design|implement)\b|"
+    r"\b(?:don't|doesn't|didn't|won't|wouldn't|shouldn't|mustn't|can't|couldn't|"
+    r"never|cannot)\s+(?:connect|integrate|embed|bridge|wire|pair|attach|migrate|"
+    r"port|use|build|create|design|implement)\b",
+    re.I,
+)
+
+MATRIX_CLAIM_EVIDENCE = {
+    "State and recovery": {
+        "Centaur": (
+            EXPECTED_SOURCES[1]["permalink_base"]
+            + "docs/pages/extend/workflows-v2.mdx#L8-L26",
+            EXPECTED_SOURCES[1]["permalink_base"]
+            + "docs/pages/architecture.mdx#L113-L122",
+        ),
+    },
+    "Skill/instruction model": {
+        "Shoggoth": (
+            EXPECTED_SOURCES[0]["permalink_base"] + "PROMISE_MACHINE.md#L39-L50",
+        ),
+    },
+    "Workflows": {
+        "Centaur": (
+            EXPECTED_SOURCES[1]["permalink_base"]
+            + "services/workflow-python/api/workflow_engine.py#L50-L183",
+        ),
+    },
+    "Multi-agent work": {
+        "Centaur": (
+            EXPECTED_SOURCES[1]["permalink_base"]
+            + "services/workflow-python/api/workflow_engine.py#L123-L180",
+        ),
+    },
+    "Operating burden": {
+        "Centaur": (
+            EXPECTED_SOURCES[1]["permalink_base"] + "README.md#L66-L96",
+        ),
+    },
+}
+
 MARKDOWN_LINK = re.compile(r"(?<!!)\[[^\]]*\]\(([^)\s]+)")
 GITHUB_BLOB = re.compile(
     r"https://github\.com/([^/]+/[^/]+)/blob/([^/#?\s\"'<>]+)/[^\s)]+"
 )
 H2_HEADING = re.compile(r"^## ([^\n]+)$", re.MULTILINE)
+H3_HEADING = re.compile(r"^### ([^\n]+)$", re.MULTILINE)
+ATX_HEADING = re.compile(r"^[ \t]{0,3}#{1,6}[ \t]+(.+?)[ \t]*$")
+SETEXT_HEADING = re.compile(r"^[ \t]{0,3}(?:=+|-+)[ \t]*$")
+FENCE_START = re.compile(r"^[ \t]{0,3}(`{3,}|~{3,})")
 LOCAL_PATHS = (
     re.compile(r"(?<![A-Za-z0-9])/(?:Users|home)/[^\s`'\"<>]+"),
     re.compile(r"(?i)(?<![A-Za-z0-9])[A-Z]:\\Users\\[^\s`'\"<>]+"),
@@ -266,6 +557,72 @@ def iter_text(root: Path) -> list[tuple[str, str]]:
     return found
 
 
+def github_heading_slug(heading: str) -> str:
+    """Return the bounded GitHub-style fragment for one Markdown heading."""
+
+    value = html.unescape(heading)
+    value = re.sub(r"!\[([^\]]*)\]\([^)]*\)", r"\1", value)
+    value = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", value)
+    value = re.sub(r"<[^>]+>", "", value)
+    value = re.sub(r"[`*_~]", "", value).casefold()
+    kept = "".join(
+        character
+        for character in value
+        if character.isalnum() or character.isspace() or character in "-_"
+    )
+    return re.sub(r"\s+", "-", kept).strip("-")
+
+
+def markdown_heading_fragments(text: str) -> set[str]:
+    """Collect ATX and setext heading ids, including duplicate suffixes."""
+
+    headings: list[str] = []
+    previous: str | None = None
+    fence: tuple[str, int] | None = None
+    for line in text.splitlines():
+        if fence is not None:
+            character, minimum = fence
+            if re.fullmatch(
+                rf"[ \t]{{0,3}}{re.escape(character)}{{{minimum},}}[ \t]*",
+                line,
+            ):
+                fence = None
+            continue
+
+        fence_match = FENCE_START.match(line)
+        if fence_match:
+            marker = fence_match.group(1)
+            fence = (marker[0], len(marker))
+            previous = None
+            continue
+
+        atx = ATX_HEADING.match(line)
+        if atx:
+            heading = re.sub(r"[ \t]+#+[ \t]*$", "", atx.group(1))
+            headings.append(heading)
+            previous = None
+            continue
+
+        if SETEXT_HEADING.match(line) and previous:
+            headings.append(previous)
+            previous = None
+            continue
+        previous = line.strip() or None
+
+    fragments: set[str] = set()
+    for heading in headings:
+        base = github_heading_slug(heading)
+        if not base:
+            continue
+        fragment = base
+        suffix = 1
+        while fragment in fragments:
+            fragment = f"{base}-{suffix}"
+            suffix += 1
+        fragments.add(fragment)
+    return fragments
+
+
 def check_relative_links(root: Path, relative: str, text: str) -> list[str]:
     errors: list[str] = []
     for match in MARKDOWN_LINK.finditer(text):
@@ -276,15 +633,15 @@ def check_relative_links(root: Path, relative: str, text: str) -> list[str]:
         if parsed.scheme or parsed.netloc or raw.startswith(("/", "~")):
             errors.append(f"{relative}: unsafe Markdown link {raw}")
             continue
-        if raw.startswith("#"):
-            continue
         link_path = unquote(parsed.path)
-        if not link_path:
-            continue
         if "\\" in link_path or "\x00" in link_path:
             errors.append(f"{relative}: unsafe Markdown link {raw}")
             continue
-        candidate = (root / relative).parent / link_path
+        candidate = (
+            (root / relative).parent / link_path
+            if link_path
+            else root / relative
+        )
         try:
             resolved = candidate.resolve(strict=True)
         except FileNotFoundError:
@@ -292,6 +649,27 @@ def check_relative_links(root: Path, relative: str, text: str) -> list[str]:
             continue
         if not _inside(resolved, root.resolve()) or not resolved.is_file():
             errors.append(f"{relative}: Markdown link escapes repository {raw}")
+            continue
+        if parsed.fragment and resolved.suffix.lower() == ".md":
+            try:
+                fragment = unquote(parsed.fragment, errors="strict")
+            except UnicodeDecodeError:
+                errors.append(
+                    f"{relative}: invalid percent-encoded Markdown fragment "
+                    f"#{parsed.fragment} in link {raw}"
+                )
+                continue
+            target_relative = resolved.relative_to(root.resolve()).as_posix()
+            try:
+                target_text = read_text(root, target_relative)
+            except (CheckError, FileNotFoundError) as exc:
+                errors.append(f"{relative}: cannot read Markdown link {raw}: {exc}")
+                continue
+            if fragment not in markdown_heading_fragments(target_text):
+                errors.append(
+                    f"{relative}: unresolved Markdown fragment #{fragment} "
+                    f"in link {raw}"
+                )
     return errors
 
 
@@ -321,6 +699,328 @@ def section_text(text: str, heading: str) -> str:
         rf"^## {re.escape(heading)}\n(.*?)(?=^## |\Z)", text, re.MULTILINE | re.DOTALL
     )
     return match.group(1) if match else ""
+
+
+def heading_section(text: str, level: int, heading: str) -> str:
+    """Return one exact Markdown heading body at ``level``."""
+
+    hashes = "#" * level
+    match = re.search(
+        rf"^{hashes} {re.escape(heading)}\n(.*?)(?=^#{{1,{level}}} |\Z)",
+        text,
+        re.MULTILINE | re.DOTALL,
+    )
+    return match.group(1) if match else ""
+
+
+def table_cells(line: str) -> tuple[str, ...]:
+    """Split one simple pipe table row used by the checked matrix."""
+
+    stripped = line.strip()
+    if not (stripped.startswith("|") and stripped.endswith("|")):
+        return ()
+    return tuple(cell.strip() for cell in stripped[1:-1].split("|"))
+
+
+def matrix_rows(text: str) -> list[tuple[str, ...]]:
+    """Return the rows after the exact matrix header, excluding its delimiter."""
+
+    lines = text.splitlines()
+    matches = [index for index, line in enumerate(lines) if table_cells(line) == MATRIX_HEADER]
+    if len(matches) != 1:
+        return []
+    start = matches[0]
+    if start + 1 >= len(lines):
+        return []
+    delimiter = table_cells(lines[start + 1])
+    if len(delimiter) != len(MATRIX_HEADER) or not all(
+        re.fullmatch(r":?-{3,}:?", cell) for cell in delimiter
+    ):
+        return []
+    rows: list[tuple[str, ...]] = []
+    for line in lines[start + 2 :]:
+        cells = table_cells(line)
+        if not cells:
+            break
+        rows.append(cells)
+    return rows
+
+
+def check_actionable_integration(relative: str, text: str) -> list[str]:
+    """Reject implementation-shaped cross-system material in synthesis files."""
+
+    errors: list[str] = []
+    for pattern in ACTIONABLE_INTEGRATION_PATTERNS:
+        for match in pattern.finditer(text):
+            prefix = text[max(0, match.start() - 80) : match.start()]
+            if NEGATED_ACTION_PREFIX.search(prefix):
+                continue
+            if NEGATED_INTEGRATION_ACTION.search(match.group(0)):
+                continue
+            errors.append(
+                f"{relative}: no-integration rule rejects actionable shape "
+                f"{pattern.pattern!r}"
+            )
+            break
+    return errors
+
+
+def check_product_verdict(relative: str, text: str) -> list[str]:
+    """Reject a product choice, recommendation, or winner statement."""
+
+    errors: list[str] = []
+    for pattern in PRODUCT_VERDICT_PATTERNS:
+        for match in pattern.finditer(text):
+            prefix = text[max(0, match.start() - 80) : match.start()]
+            if NEGATED_ACTION_PREFIX.search(prefix):
+                continue
+            errors.append(
+                f"{relative}: no-product-verdict rule rejects {pattern.pattern!r}"
+            )
+            break
+    return errors
+
+
+def check_matrix_document(text: str) -> list[str]:
+    """Check the exact neutral responsibility matrix contract."""
+
+    errors: list[str] = []
+    headings = tuple(H2_HEADING.findall(text))
+    if headings != MATRIX_HEADINGS:
+        errors.append(
+            f"{MATRIX_FILE}: matrix-heading-order rule expected {MATRIX_HEADINGS}, "
+            f"got {headings}"
+        )
+
+    rows = matrix_rows(text)
+    if not rows:
+        errors.append(f"{MATRIX_FILE}: matrix-field rule requires the exact header")
+        return errors
+    malformed = [index for index, row in enumerate(rows, start=1) if len(row) != 4]
+    for index in malformed:
+        errors.append(f"{MATRIX_FILE}: matrix-field rule row {index} must have four fields")
+    observed_axes = tuple(row[0] for row in rows if len(row) == 4)
+    if observed_axes != MATRIX_AXES:
+        errors.append(
+            f"{MATRIX_FILE}: matrix-axis rule expected {MATRIX_AXES}, got {observed_axes}"
+        )
+
+    for index, row in enumerate(rows, start=1):
+        if len(row) != 4:
+            continue
+        axis, shoggoth, centaur, difference = row
+        for label, cell in (
+            ("Shoggoth", shoggoth),
+            ("Centaur", centaur),
+            ("responsibility difference", difference),
+        ):
+            if not cell.startswith(STATUS_LABELS):
+                errors.append(
+                    f"{MATRIX_FILE}: matrix-status rule row {index} {label} lacks a leading status"
+                )
+        subject_cells = (
+            (
+                "Shoggoth",
+                shoggoth,
+                "01-shoggoth.md#",
+                EXPECTED_SOURCES[0]["permalink_base"],
+            ),
+            (
+                "Centaur",
+                centaur,
+                "02-centaur.md#",
+                EXPECTED_SOURCES[1]["permalink_base"],
+            ),
+        )
+        for label, cell, profile, pin in subject_cells:
+            if profile not in cell or "Limit:" not in cell:
+                errors.append(
+                    f"{MATRIX_FILE}: matrix-source-limit rule row {index} {label} is incomplete"
+                )
+            if not re.search(
+                r"\[(?:Current|Inferred|Reported|Planned|Unknown)\]\s+Limit:",
+                cell,
+            ):
+                errors.append(
+                    f"{MATRIX_FILE}: matrix-limit-status rule row {index} {label} "
+                    "needs a separate status on Limit:"
+                )
+            if "[Current]" in cell and pin not in cell:
+                errors.append(
+                    f"{MATRIX_FILE}: matrix-current-pin rule row {index} {label} "
+                    "lacks its registered full pin"
+                )
+            for required in MATRIX_CLAIM_EVIDENCE.get(axis, {}).get(label, ()):
+                if required not in cell:
+                    errors.append(
+                        f"{MATRIX_FILE}: matrix-claim-evidence rule row {index} "
+                        f"{label} lacks {required}"
+                    )
+        if "01-shoggoth.md#" not in difference or "02-centaur.md#" not in difference:
+            errors.append(
+                f"{MATRIX_FILE}: matrix-difference-source rule row {index} lacks both profiles"
+            )
+        if axis == "Credentials":
+            normalised = " ".join(centaur.lower().split())
+            for marker in (
+                "default-deny",
+                "placeholders",
+                "permissive egress",
+                "legitimate capabilities",
+                "workflow-host",
+                "postgres",
+                "https",
+            ):
+                if marker not in normalised:
+                    errors.append(
+                        f"{MATRIX_FILE}: Centaur-security-adjacency rule missing {marker!r}"
+                    )
+
+    if "SOURCES.md" not in text or "../evidence/pins.json" not in text:
+        errors.append(
+            f"{MATRIX_FILE}: matrix-evidence rule requires the ledger and pin registry"
+        )
+    for pattern in MATRIX_RANKING_PATTERNS:
+        if pattern.search(text):
+            errors.append(
+                f"{MATRIX_FILE}: non-scored-matrix rule rejects {pattern.pattern!r}"
+            )
+    errors.extend(check_actionable_integration(MATRIX_FILE, text))
+    return errors
+
+
+def check_complement_document(text: str) -> list[str]:
+    """Check separated conceptual complement and bounded competitive overlap."""
+
+    errors: list[str] = []
+    headings = tuple(H2_HEADING.findall(text))
+    if headings != COMPLEMENT_HEADINGS:
+        errors.append(
+            f"{COMPLEMENT_FILE}: analysis-heading-order rule expected "
+            f"{COMPLEMENT_HEADINGS}, got {headings}"
+        )
+
+    complement = " ".join(section_text(text, "Conceptual complement").split())
+    for marker in (
+        "what bounded agent job, evidence, and delivery is authorised",
+        "where team sessions run, persist, receive capabilities, and recover",
+        "responsibility level",
+        "analytical relationship",
+    ):
+        if marker not in complement:
+            errors.append(
+                f"{COMPLEMENT_FILE}: conceptual-complement rule missing {marker!r}"
+            )
+    if "01-shoggoth.md#" not in complement or "02-centaur.md#" not in complement:
+        errors.append(
+            f"{COMPLEMENT_FILE}: conceptual-complement-source rule lacks both profiles"
+        )
+
+    competition = section_text(text, "Competitive overlap")
+    observed = tuple(H3_HEADING.findall(competition))
+    if observed != COMPETITION_HEADINGS:
+        errors.append(
+            f"{COMPLEMENT_FILE}: competitive-overlap-axis rule expected "
+            f"{COMPETITION_HEADINGS}, got {observed}"
+        )
+    for heading in COMPETITION_HEADINGS:
+        body = heading_section(competition, 3, heading)
+        for marker in (
+            "**Shoggoth consequence.**",
+            "**Centaur consequence.**",
+            "**Shared consequence.**",
+        ):
+            if marker not in body:
+                errors.append(
+                    f"{COMPLEMENT_FILE}: competitive-consequence rule {heading!r} "
+                    f"missing {marker}"
+                )
+        if "01-shoggoth.md#" not in body or "02-centaur.md#" not in body:
+            errors.append(
+                f"{COMPLEMENT_FILE}: competitive-source rule {heading!r} lacks both profiles"
+            )
+
+    boundary = " ".join(section_text(text, "No-integration boundary").split())
+    for marker in (
+        "no adapter",
+        "API or interface map",
+        "combined architecture",
+        "dependency",
+        "migration phase",
+        "implementation steps",
+        "embedding",
+        "does not claim that using the two together is recommended",
+    ):
+        if marker not in boundary:
+            errors.append(f"{COMPLEMENT_FILE}: no-integration boundary missing {marker!r}")
+    errors.extend(check_actionable_integration(COMPLEMENT_FILE, text))
+    errors.extend(check_product_verdict(COMPLEMENT_FILE, text))
+    return errors
+
+
+def check_decision_document(text: str) -> list[str]:
+    """Check the problem-to-layer questions without producing a product verdict."""
+
+    errors: list[str] = []
+    headings = tuple(H2_HEADING.findall(text))
+    if headings != DECISION_HEADINGS:
+        errors.append(
+            f"{DECISION_FILE}: decision-heading-order rule expected "
+            f"{DECISION_HEADINGS}, got {headings}"
+        )
+    for heading in DECISION_HEADINGS:
+        body = heading_section(text, 2, heading)
+        for marker in ("**Question.**", "**Inspect next.**", "**Keep unknown.**"):
+            if marker not in body:
+                errors.append(
+                    f"{DECISION_FILE}: decision-route-shape rule {heading!r} missing {marker}"
+                )
+        if "[Unknown]" not in body:
+            errors.append(
+                f"{DECISION_FILE}: decision-unknown rule {heading!r} lacks [Unknown]"
+            )
+        if not MARKDOWN_LINK.search(body):
+            errors.append(
+                f"{DECISION_FILE}: decision-evidence rule {heading!r} lacks an evidence link"
+            )
+    if "SOURCES.md" not in text or "../evidence/pins.json" not in text:
+        errors.append(
+            f"{DECISION_FILE}: decision-evidence rule requires the ledger and pin registry"
+        )
+    errors.extend(check_product_verdict(DECISION_FILE, text))
+    errors.extend(check_actionable_integration(DECISION_FILE, text))
+    return errors
+
+
+def check_final_entrypoints(readme: str, methodology: str, workflow: str) -> list[str]:
+    """Check final navigation and the exact offline proving commands."""
+
+    errors: list[str] = []
+    for command in STEP_COMMANDS:
+        if command not in readme:
+            errors.append(f"README.md: missing verification command {command}")
+        if command not in methodology:
+            errors.append(f"docs/00-methodology.md: missing verification command {command}")
+    for command in WORKFLOW_COMMANDS:
+        if command not in workflow:
+            errors.append(f"verify.yml: missing verification command {command}")
+
+    normalised_readme = " ".join(readme.split())
+    required_stage = (
+        "This edition contains the symmetric profiles, comparison matrix, conceptual "
+        "complement and competitive-overlap analysis, decision guide, and source ledger."
+    )
+    if required_stage not in normalised_readme:
+        errors.append("README.md: stage rule must expose the complete Step 3 reader path")
+
+    positions = [readme.find(relative) for relative in README_NAVIGATION]
+    for relative, position in zip(README_NAVIGATION, positions):
+        if position < 0:
+            errors.append(f"README.md: navigation rule missing {relative}")
+    present_positions = [position for position in positions if position >= 0]
+    if present_positions != sorted(present_positions):
+        errors.append("README.md: navigation-order rule does not match the final reader path")
+    return errors
 
 
 def status_blocks(text: str, label: str) -> list[str]:
@@ -531,6 +1231,9 @@ def inspect_repository(root: Path = ROOT) -> tuple[list[str], list[str]]:
             if pattern.search(text):
                 errors.append(f"{relative}: credential-shaped content is prohibited")
                 break
+        if relative in READER_ANALYSIS_FILES and relative not in SYNTHESIS_FILES:
+            errors.extend(check_actionable_integration(relative, text))
+            errors.extend(check_product_verdict(relative, text))
 
     if linked_subjects != {"shoggoth", "centaur"}:
         errors.append("immutable full-commit links are required for both source subjects")
@@ -561,27 +1264,21 @@ def inspect_repository(root: Path = ROOT) -> tuple[list[str], list[str]]:
         diagnostics.append(f"PROFILE {subject}: symmetric shape and status checked")
     errors.extend(check_source_ledger(ledger))
 
-    for command in STEP_COMMANDS:
-        if command not in readme:
-            errors.append(f"README.md: missing verification command {command}")
-        if command not in methodology:
-            errors.append(f"docs/00-methodology.md: missing verification command {command}")
-    for command in WORKFLOW_COMMANDS:
-        if command not in workflow:
-            errors.append(f"verify.yml: missing verification command {command}")
-    normalised_readme = " ".join(readme.split())
-    required_stage = (
-        "The evidence contract and the two symmetric source profiles are now present. "
-        "Comparative synthesis is deliberately not written until Fiat Step 3."
+    synthesis_checks = (
+        (MATRIX_FILE, check_matrix_document, "13 responsibility axes"),
+        (COMPLEMENT_FILE, check_complement_document, "conceptual and competitive bounds"),
+        (DECISION_FILE, check_decision_document, "problem-to-layer routes"),
     )
-    if required_stage not in normalised_readme:
-        errors.append("README.md: stage rule must expose profiles and defer Step 3 synthesis")
+    for relative, check, description in synthesis_checks:
+        try:
+            document = read_text(root, relative)
+        except (CheckError, FileNotFoundError) as exc:
+            errors.append(f"{relative}: synthesis-read rule failed: {exc}")
+            continue
+        errors.extend(check(document))
+        diagnostics.append(f"SYNTHESIS {relative}: {description} checked")
 
-    for relative in PROFILE_FILES:
-        if relative not in readme:
-            errors.append(f"README.md: navigation rule missing {relative}")
-    if "docs/SOURCES.md" not in readme:
-        errors.append("README.md: navigation rule missing docs/SOURCES.md")
+    errors.extend(check_final_entrypoints(readme, methodology, workflow))
 
     diagnostics.append(f"INVENTORY regular UTF-8 files: {len(inventory)}")
     return errors, diagnostics
@@ -596,7 +1293,7 @@ def main() -> int:
             print(f"ERROR {error}", file=sys.stderr)
         print(f"RESULT fail: {len(errors)} error(s)", file=sys.stderr)
         return 1
-    print("RESULT pass: evidence, source profiles, and ledger contract satisfied")
+    print("RESULT pass: final evidence, synthesis, navigation, and demo contract satisfied")
     return 0
 
 

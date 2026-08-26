@@ -53,8 +53,7 @@ what that repository owns or claims.
 Strengths and weaknesses are relative to stated purpose. A missing service
 control plane is not automatically a skill framework defect; a missing Fiat
 receipt is not automatically a runtime-platform defect. The finished matrix
-will name responsibilities and use no score, aggregate rating, or universal
-winner.
+names responsibilities without collapsing them into an aggregate judgement.
 
 Complementarity is conceptual only. This repository will not specify,
 prototype, recommend, or estimate an adapter, port, migration, embedding,
@@ -67,7 +66,7 @@ The normal verdict is offline:
 
 ```bash
 python3 scripts/check_repository.py
-python3 scripts/run_tests.py --report .elenchus/shoggoth-vs-centaur-step-2.json
+python3 scripts/run_tests.py --report .elenchus/shoggoth-vs-centaur-step-3.json
 python3 -m unittest discover -s tests
 ```
 
@@ -84,6 +83,8 @@ private proprietary rights position is recorded in [LICENSE](../LICENSE).
 
 The symmetric [Shoggoth](01-shoggoth.md) and [Centaur](02-centaur.md) profiles
 apply this method, and the [source ledger](SOURCES.md) records their evidence.
-Comparative synthesis remains unwritten until Fiat Step 3. The accepted
-[Fiat study](fiat-study.md) and [runbook](fiat-runbook.md) define that later
-work.
+The [matrix](03-comparison-matrix.md),
+[complement and competition analysis](04-complement-and-competition.md), and
+[decision guide](05-decision-guide.md) apply the same status and layer rules.
+The accepted [Fiat study](fiat-study.md) and [runbook](fiat-runbook.md) preserve
+the planning contract behind this edition.
