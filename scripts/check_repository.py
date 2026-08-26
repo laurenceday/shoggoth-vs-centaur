@@ -245,7 +245,14 @@ ACTIONABLE_INTEGRATION_PATTERNS = (
         re.I | re.MULTILINE,
     ),
     re.compile(r"\b(?:GET|POST|PUT|PATCH|DELETE)\s+/[A-Za-z0-9]"),
-    re.compile(r"\b(?:Step|Phase)\s+\d+\s*:", re.I),
+    re.compile(
+        r"\b(?:Step|Phase)\s+\d+\s*:[^\n]{0,160}\b(?:"
+        r"(?:connect|integrate|embed|bridge|wire|pair|attach|migrate|port)\b"
+        r"[^\n]{0,120}\b(?:systems?|projects?|platforms?|Shoggoth|Centaur|both)|"
+        r"(?:build|create|design|implement)\b[^\n]{0,80}\b"
+        r"(?:adapter|integration|bridge|connector|combined architecture))\b",
+        re.I,
+    ),
     re.compile(
         r"^(?:[ \t]{0,3}(?:[-*+] |\d+\. )?)"
         r"(?:Build|Create|Design|Implement)\s+(?:an?\s+|the\s+)?"
@@ -273,6 +280,26 @@ ACTIONABLE_INTEGRATION_PATTERNS = (
         r"\b(?:connect|embed|integrate|bridge|wire)\s+(?:the\s+)?"
         r"(?:Shoggoth|Centaur)\b[^.\n]{0,80}\b(?:with|to|into|in)\s+"
         r"(?:the\s+)?(?:Shoggoth|Centaur)\b",
+        re.I,
+    ),
+    re.compile(
+        r"\bpair\s+(?:the\s+)?(?:Shoggoth|Centaur)\b[^.\n]{0,80}"
+        r"\bwith\s+(?:the\s+)?(?:Shoggoth|Centaur)\b[^.\n]{0,80}"
+        r"\b(?:runtime|session|deployment|workflow|sandbox|service|tools?|"
+        r"architecture|integration)\b",
+        re.I,
+    ),
+    re.compile(
+        r"\battach\s+(?:the\s+)?(?:Shoggoth|Centaur)\b[^.\n]{0,60}"
+        r"\b(?:skills?|instructions?|workflows?|tools?|capabilities?)\b[^.\n]{0,60}"
+        r"\b(?:to|into|onto)\s+(?:the\s+)?(?:Shoggoth|Centaur)\b",
+        re.I,
+    ),
+    re.compile(
+        r"\buse\s+both\s+(?:the\s+)?(?:Shoggoth|Centaur)\b[^.\n]{0,40}"
+        r"\b(?:and|with)\s+(?:the\s+)?(?:Shoggoth|Centaur)\b[^.\n]{0,80}"
+        r"\b(?:runtime|session|deployment|workflow|sandbox|service|tools?|"
+        r"architecture|integration)\b",
         re.I,
     ),
     re.compile(
@@ -338,6 +365,22 @@ ACTIONABLE_INTEGRATION_PATTERNS = (
         re.I,
     ),
     re.compile(r"```mermaid", re.I),
+)
+
+NEGATED_ACTION_PREFIX = re.compile(
+    r"(?:\b(?:do|does|did|is|are|was|were|will|would|should|must|can|could)\s+not|"
+    r"\b(?:don't|doesn't|didn't|isn't|aren't|wasn't|weren't|won't|wouldn't|"
+    r"shouldn't|mustn't|can't|couldn't|never|not|cannot))\s+$",
+    re.I,
+)
+NEGATED_INTEGRATION_ACTION = re.compile(
+    r"\b(?:do|does|did|will|would|should|must|can|could)\s+not\s+"
+    r"(?:connect|integrate|embed|bridge|wire|pair|attach|migrate|port|use|build|"
+    r"create|design|implement)\b|"
+    r"\b(?:don't|doesn't|didn't|won't|wouldn't|shouldn't|mustn't|can't|couldn't|"
+    r"never|cannot)\s+(?:connect|integrate|embed|bridge|wire|pair|attach|migrate|"
+    r"port|use|build|create|design|implement)\b",
+    re.I,
 )
 
 MATRIX_CLAIM_EVIDENCE = {
@@ -708,11 +751,17 @@ def check_actionable_integration(relative: str, text: str) -> list[str]:
 
     errors: list[str] = []
     for pattern in ACTIONABLE_INTEGRATION_PATTERNS:
-        if pattern.search(text):
+        for match in pattern.finditer(text):
+            prefix = text[max(0, match.start() - 80) : match.start()]
+            if NEGATED_ACTION_PREFIX.search(prefix):
+                continue
+            if NEGATED_INTEGRATION_ACTION.search(match.group(0)):
+                continue
             errors.append(
                 f"{relative}: no-integration rule rejects actionable shape "
                 f"{pattern.pattern!r}"
             )
+            break
     return errors
 
 
@@ -721,10 +770,14 @@ def check_product_verdict(relative: str, text: str) -> list[str]:
 
     errors: list[str] = []
     for pattern in PRODUCT_VERDICT_PATTERNS:
-        if pattern.search(text):
+        for match in pattern.finditer(text):
+            prefix = text[max(0, match.start() - 80) : match.start()]
+            if NEGATED_ACTION_PREFIX.search(prefix):
+                continue
             errors.append(
                 f"{relative}: no-product-verdict rule rejects {pattern.pattern!r}"
             )
+            break
     return errors
 
 

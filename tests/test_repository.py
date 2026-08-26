@@ -470,6 +470,9 @@ class SynthesisContractTests(unittest.TestCase):
             "The combined architecture would route work through both systems.",
             "Configure Centaur to load Shoggoth skills.",
             "Deploy Shoggoth and Centaur together.",
+            "Pair Shoggoth with Centaur for runtime hosting.",
+            "Attach Shoggoth skills to Centaur as tools.",
+            "Use both Shoggoth and Centaur for the operated session.",
         ):
             with self.subTest(snippet=snippet):
                 errors = checker.check_complement_document(
@@ -488,6 +491,35 @@ class SynthesisContractTests(unittest.TestCase):
             checker.check_actionable_integration(checker.COMPLEMENT_FILE, boundary),
             [],
         )
+
+    def test_neutral_steps_and_explicit_denials_are_not_rejected(self) -> None:
+        allowed = (
+            "Step 1: inspect the pinned evidence.",
+            "Phase 1: do not connect Shoggoth to Centaur.",
+            "Do not pair Shoggoth with Centaur.",
+            "Pair Shoggoth with Centaur only as comparison subjects.",
+            "Attach Shoggoth citations to Centaur comparison notes.",
+            "Use both Shoggoth and Centaur as comparison subjects.",
+        )
+        for snippet in allowed:
+            with self.subTest(snippet=snippet):
+                self.assertEqual(
+                    checker.check_actionable_integration("fixture.md", snippet),
+                    [],
+                )
+
+    def test_explicit_product_denials_are_not_rejected(self) -> None:
+        allowed = (
+            "Do not choose Shoggoth from this document.",
+            "The repository does not adopt Centaur.",
+            "We do not recommend Shoggoth.",
+        )
+        for snippet in allowed:
+            with self.subTest(snippet=snippet):
+                self.assertEqual(
+                    checker.check_product_verdict("fixture.md", snippet),
+                    [],
+                )
 
     def test_decision_guide_has_exact_problem_routes(self) -> None:
         self.assertEqual(
